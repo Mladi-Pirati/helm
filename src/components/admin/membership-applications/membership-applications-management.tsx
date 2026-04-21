@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DeleteMembershipApplicationDialog } from "@/components/admin/membership-applications/delete-membership-application-dialog";
 import {
   buildMembershipApplicationDetailsHref,
   getMembershipApplicationStatusVariant,
@@ -55,9 +56,11 @@ function formatDateTime(value: string) {
 }
 
 export function MembershipApplicationsManagement({
+  canDelete,
   queryString,
   rows,
 }: {
+  canDelete: boolean;
   queryString: string;
   rows: MembershipApplicationListRow[];
 }) {
@@ -130,9 +133,9 @@ export function MembershipApplicationsManagement({
     {
       id: "actions",
       header: "Actions",
-      size: 96,
+      size: canDelete ? 172 : 96,
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
           <Button asChild size="xs" variant="outline">
             <Link
               href={buildMembershipApplicationDetailsHref(
@@ -144,6 +147,9 @@ export function MembershipApplicationsManagement({
               View
             </Link>
           </Button>
+          {canDelete ? (
+            <DeleteMembershipApplicationDialog row={row.original} />
+          ) : null}
         </div>
       ),
     },

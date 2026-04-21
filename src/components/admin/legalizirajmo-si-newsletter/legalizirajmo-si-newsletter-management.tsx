@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DeleteNewsletterSubscriptionDialog } from "@/components/admin/legalizirajmo-si-newsletter/delete-newsletter-subscription-dialog";
 
 export type LegalizirajmoSiNewsletterListRow = {
   id: string;
@@ -39,8 +40,10 @@ function formatDateTime(value: string) {
 }
 
 export function LegalizirajmoSiNewsletterManagement({
+  canDelete,
   rows,
 }: {
+  canDelete: boolean;
   rows: LegalizirajmoSiNewsletterListRow[];
 }) {
   const columns: ColumnDef<LegalizirajmoSiNewsletterListRow>[] = [
@@ -64,6 +67,20 @@ export function LegalizirajmoSiNewsletterManagement({
         </span>
       ),
     },
+    ...(canDelete
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            size: 112,
+            cell: ({ row }) => (
+              <div className="flex justify-end">
+                <DeleteNewsletterSubscriptionDialog row={row.original} />
+              </div>
+            ),
+          } satisfies ColumnDef<LegalizirajmoSiNewsletterListRow>,
+        ]
+      : []),
   ];
 
   // eslint-disable-next-line react-hooks/incompatible-library

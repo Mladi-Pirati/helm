@@ -12,20 +12,33 @@ import {
 import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
 import { membershipApplicationStatuses } from "@/lib/membership-applications";
 
-type MembershipApplicationActionResult =
+type MembershipApplicationActionFailure = {
+  ok: false;
+  message: string;
+};
+
+type UpdateMembershipApplicationStatusActionResult =
   | {
       ok: true;
       status: MembershipApplicationStatus;
       updatedAt: string;
     }
+  | MembershipApplicationActionFailure;
+
+type DeleteMembershipApplicationActionResult =
   | {
-      ok: false;
-      message: string;
-    };
+      ok: true;
+      message?: string;
+    }
+  | MembershipApplicationActionFailure;
 
 const updateMembershipApplicationStatusSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
   status: z.enum(membershipApplicationStatuses),
+});
+
+const deleteMembershipApplicationSchema = z.object({
+  applicationId: z.string().trim().min(1, "Application id is required."),
 });
 
 async function requireMembershipApplicationsAdmin() {
@@ -61,7 +74,7 @@ async function requireMembershipApplicationsAdmin() {
 export async function updateMembershipApplicationStatusAction(
   applicationId: string,
   status: MembershipApplicationStatus,
-): Promise<MembershipApplicationActionResult> {
+): Promise<UpdateMembershipApplicationStatusActionResult> {
   const access = await requireMembershipApplicationsAdmin();
 
   if (!access.ok) {
@@ -130,5 +143,71 @@ export async function updateMembershipApplicationStatusAction(
     ok: true,
     status: updatedApplication.status,
     updatedAt: updatedApplication.updatedAt.toISOString(),
+  };
+}
+
+export async function deleteMembershipApplicationAction(
+  applicationId: string,
+): Promise<DeleteMembershipApplicationActionResult> {
+  const access = await requireMembershipApplicationsAdmin();
+
+  if (!access.ok) {
+    return {
+      ok: false,
+      message: access.message,
+    };
+  }
+
+  const parsedValues = deleteMembershipApplicationSchema.safeParse({
+    applicationId,
+  });
+
+  if (!parsedValues.success) {
+    return {
+      ok: false,
+      message: "That application could not be found.",
+    };
+  }
+
+  let deletedApplication:
+    | {
+        id: string;
+      }
+    | undefined;
+
+  try {
+    [deletedApplication] = await db
+      .delete(mladiPiratiMembershipApplications)
+      .where(
+        eq(
+          mladiPiratiMembershipApplications.id,
+          parsedValues.data.applicationId,
+        ),
+      )
+      .returning({
+        id: mladiPiratiMembershipApplications.id,
+      });
+  } catch {
+    return {
+      ok: false,
+      message: "Unable to delete the application right now.",
+    };
+  }
+
+  if (!deletedApplication) {
+    return {
+      ok: false,
+      message: "That application could not be found.",
+    };
+  }
+
+  revalidatePath("/admin/membership-applications");
+  revalidatePath(
+    `/admin/membership-applications/${parsedValues.data.applicationId}`,
+  );
+
+  return {
+    ok: true,
+    message: "Application deleted successfully.",
   };
 }
