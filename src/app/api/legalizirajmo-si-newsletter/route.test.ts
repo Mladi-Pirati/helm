@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 type RateLimitResult = {
   rateLimited: boolean;
@@ -6,8 +6,21 @@ type RateLimitResult = {
 };
 
 type TurnstileResult =
-  | { ok: true }
-  | { ok: false; reason: "invalid" | "unavailable" };
+  | { ok: true; hostname?: string | null }
+  | {
+      ok: false;
+      reason: "invalid";
+      errorCodes?: string[];
+      hostname?: string | null;
+    }
+  | {
+      ok: false;
+      reason: "unavailable";
+      cause?: string;
+      errorCodes?: string[];
+      hostname?: string | null;
+      status?: number | null;
+    };
 
 let rateLimitResult: RateLimitResult = {
   rateLimited: false,
@@ -19,6 +32,9 @@ let insertedValues: Array<Record<string, unknown>> = [];
 let turnstileCalls: Array<{ token: string; remoteIp: string | null }> = [];
 
 const newsletterTable = Symbol("legalizirajmoSiNewsletterSubscriptions");
+const originalConsoleInfo = console.info;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
 
 async function checkRateLimit() {
   return rateLimitResult;
@@ -81,6 +97,15 @@ beforeEach(() => {
   insertError = null;
   insertedValues = [];
   turnstileCalls = [];
+  console.info = (() => {}) as typeof console.info;
+  console.warn = (() => {}) as typeof console.warn;
+  console.error = (() => {}) as typeof console.error;
+});
+
+afterEach(() => {
+  console.info = originalConsoleInfo;
+  console.warn = originalConsoleWarn;
+  console.error = originalConsoleError;
 });
 
 describe("POST /api/legalizirajmo-si-newsletter", () => {
@@ -193,6 +218,60 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
     expect(body.code).toBe("captcha_invalid");
     expect(body.message.length).toBeGreaterThan(0);
+    expect(insertedValues).toHaveLength(0);
+  });
+
+  test("returns 400 captcha_invalid when captchaToken is blank", async () => {
+    const { POST } = await routeModulePromise;
+
+    rateLimitResult = {
+      rateLimited: true,
+      retryAfterSeconds: 17,
+    };
+
+    const response = await POST(
+      createRequest({
+        email: "newsletter@example.com",
+        captchaToken: "   ",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      code: "captcha_invalid",
+      message: "Captcha verification failed. Please try again.",
+    });
+    expect(turnstileCalls).toHaveLength(0);
+    expect(insertedValues).toHaveLength(0);
+  });
+
+  test("returns 500 when captcha verification is unavailable", async () => {
+    const { POST } = await routeModulePromise;
+
+    rateLimitResult = {
+      rateLimited: true,
+      retryAfterSeconds: 17,
+    };
+    turnstileResult = {
+      ok: false,
+      reason: "unavailable",
+      cause: "missing_secret",
+      errorCodes: [],
+      hostname: null,
+      status: null,
+    };
+
+    const response = await POST(
+      createRequest({
+        email: "newsletter@example.com",
+        captchaToken: "token-from-turnstile",
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "Unable to verify captcha.",
+    });
     expect(insertedValues).toHaveLength(0);
   });
 
