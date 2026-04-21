@@ -11,7 +11,7 @@ import { legalizirajmoSiNewsletterSchema } from "@/lib/validation/legalizirajmo-
 const NEWSLETTER_METHODS = ["POST", "OPTIONS"] as const;
 const NEWSLETTER_RATE_LIMIT = {
   scope: "newsletter_submit",
-  limit: 1,
+  limit: 10,
   windowMs: 10 * 60 * 1000,
 } as const;
 
