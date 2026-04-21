@@ -2,9 +2,12 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -107,6 +110,32 @@ export const legalizirajmoSiNewsletterSubscriptions = pgTable(
   }),
 );
 
+export const apiRateLimitWindows = pgTable(
+  "api_rate_limit_windows",
+  {
+    scope: text("scope").notNull(),
+    identifierHash: text("identifier_hash").notNull(),
+    windowStart: timestamp("window_start", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    count: integer("count").notNull().default(1),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.scope, table.identifierHash, table.windowStart],
+      name: "api_rate_limit_windows_pkey",
+    }),
+    expiresAtIndex: index("api_rate_limit_windows_expires_at_idx").on(
+      table.expiresAt,
+    ),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type MembershipApplication =
@@ -117,3 +146,5 @@ export type LegalizirajmoSiNewsletterSubscription =
   typeof legalizirajmoSiNewsletterSubscriptions.$inferSelect;
 export type NewLegalizirajmoSiNewsletterSubscription =
   typeof legalizirajmoSiNewsletterSubscriptions.$inferInsert;
+export type ApiRateLimitWindow = typeof apiRateLimitWindows.$inferSelect;
+export type NewApiRateLimitWindow = typeof apiRateLimitWindows.$inferInsert;

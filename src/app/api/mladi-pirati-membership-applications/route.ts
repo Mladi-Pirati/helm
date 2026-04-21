@@ -3,11 +3,41 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import { createCorsPreflightResponse, withCors } from "@/lib/api/cors";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { membershipApplicationSchema } from "@/lib/validation/membership-application";
 
 const MEMBERSHIP_APPLICATION_METHODS = ["POST", "OPTIONS"] as const;
+const MEMBERSHIP_APPLICATION_RATE_LIMIT = {
+  scope: "membership_application_submit",
+  limit: 100,
+  windowMs: 10 * 60 * 1000,
+} as const;
 
 export async function POST(request: Request) {
+  const { rateLimited, retryAfterSeconds } = await checkRateLimit(
+    request,
+    MEMBERSHIP_APPLICATION_RATE_LIMIT,
+  );
+
+  if (rateLimited) {
+    return withCors(
+      request,
+      NextResponse.json(
+        {
+          error: "Rate limit exceeded.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Cache-Control": "no-store",
+            "Retry-After": String(retryAfterSeconds ?? 1),
+          },
+        },
+      ),
+      { methods: MEMBERSHIP_APPLICATION_METHODS },
+    );
+  }
+
   let body: unknown;
 
   try {
