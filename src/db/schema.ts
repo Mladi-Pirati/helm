@@ -87,9 +87,33 @@ export const mladiPiratiMembershipApplications = pgTable(
   },
 );
 
+export const legalizirajmoSiNewsletterSubscriptions = pgTable(
+  "legalizirajmo_si_newsletter_subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    email: text("email").notNull(),
+    rawPayload: jsonb("raw_payload")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    ...timestamps,
+  },
+  (table) => ({
+    emailUniqueIndex: uniqueIndex(
+      "legalizirajmo_si_newsletter_subscriptions_email_unique",
+    ).on(sql`lower(${table.email})`),
+  }),
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type MembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferSelect;
 export type NewMembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferInsert;
+export type LegalizirajmoSiNewsletterSubscription =
+  typeof legalizirajmoSiNewsletterSubscriptions.$inferSelect;
+export type NewLegalizirajmoSiNewsletterSubscription =
+  typeof legalizirajmoSiNewsletterSubscriptions.$inferInsert;

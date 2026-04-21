@@ -4,7 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { HomeIcon, UserPlusIcon, Users2Icon } from "lucide-react";
+import {
+  HomeIcon,
+  MailIcon,
+  UserPlusIcon,
+  Users2Icon,
+} from "lucide-react";
 
 type AdminNavLinksProps = {
   forcePasswordChange: boolean;
@@ -34,7 +39,13 @@ export function AdminNavLinks({
           href: "/admin/membership-applications",
           label: "Membership applications",
           icon: UserPlusIcon,
-          active: pathname === "/admin/membership-applications"
+          active: pathname.startsWith("/admin/membership-applications"),
+        },
+        {
+          href: "/admin/legalizirajmo-si-newsletter",
+          label: "Legalizirajmo.si Newsletter",
+          icon: MailIcon,
+          active: pathname.startsWith("/admin/legalizirajmo-si-newsletter"),
         },
         ...(isAdmin
           ? [
