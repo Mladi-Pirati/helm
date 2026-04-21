@@ -46,14 +46,14 @@ function logTurnstileEvent(
 }
 
 function getTurnstileSecretKey() {
-  const secretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+  const secretKey = process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY?.trim();
 
   return secretKey ? secretKey : null;
 }
 
 function getExpectedHostname() {
   const hostname =
-    process.env.TURNSTILE_EXPECTED_HOSTNAME?.trim().toLowerCase();
+    process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME?.trim().toLowerCase();
 
   return hostname ? hostname : null;
 }

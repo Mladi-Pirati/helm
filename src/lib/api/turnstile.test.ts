@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { verifyTurnstileToken } from "./turnstile";
 
 const originalFetch = globalThis.fetch;
-const originalTurnstileSecretKey = process.env.TURNSTILE_SECRET_KEY;
+const originalTurnstileSecretKey = process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY;
 const originalTurnstileExpectedHostname =
-  process.env.TURNSTILE_EXPECTED_HOSTNAME;
+  process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME;
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
@@ -34,8 +34,8 @@ function getRequestUrl(input: RequestInfo | URL) {
 
 describe("verifyTurnstileToken", () => {
   beforeEach(() => {
-    process.env.TURNSTILE_SECRET_KEY = "test-turnstile-secret";
-    process.env.TURNSTILE_EXPECTED_HOSTNAME = "localhost";
+    process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY = "test-turnstile-secret";
+    process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME = "localhost";
     console.info = (() => {}) as typeof console.info;
     console.warn = (() => {}) as typeof console.warn;
     console.error = (() => {}) as typeof console.error;
@@ -43,15 +43,15 @@ describe("verifyTurnstileToken", () => {
 
   afterEach(() => {
     if (originalTurnstileSecretKey === undefined) {
-      delete process.env.TURNSTILE_SECRET_KEY;
+      delete process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY;
     } else {
-      process.env.TURNSTILE_SECRET_KEY = originalTurnstileSecretKey;
+      process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY = originalTurnstileSecretKey;
     }
 
     if (originalTurnstileExpectedHostname === undefined) {
-      delete process.env.TURNSTILE_EXPECTED_HOSTNAME;
+      delete process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME;
     } else {
-      process.env.TURNSTILE_EXPECTED_HOSTNAME =
+      process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME =
         originalTurnstileExpectedHostname;
     }
 
@@ -100,7 +100,7 @@ describe("verifyTurnstileToken", () => {
   });
 
   test("returns unavailable when the Turnstile secret is missing", async () => {
-    delete process.env.TURNSTILE_SECRET_KEY;
+    delete process.env.LEGALIZIRAJMO_TURNSTILE_SECRET_KEY;
     let fetchCalled = false;
 
     globalThis.fetch = (async () => {
@@ -164,7 +164,7 @@ describe("verifyTurnstileToken", () => {
   });
 
   test("returns captcha invalid on hostname mismatch", async () => {
-    process.env.TURNSTILE_EXPECTED_HOSTNAME = "legalizirajmo.si";
+    process.env.LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME = "legalizirajmo.si";
 
     globalThis.fetch = (async () =>
       createJsonResponse({
