@@ -5,6 +5,7 @@ import { LegalizirajmoSiNewsletterManagement } from "@/components/admin/legalizi
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
 import { legalizirajmoSiNewsletterSubscriptions } from "@/db/schema";
+import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
 import {
   buildLegalizirajmoSiNewsletterListHref,
   buildLegalizirajmoSiNewsletterQueryString,
@@ -18,9 +19,12 @@ export default async function AdminLegalizirajmoSiNewsletterPage({
 }: {
   searchParams: Promise<LegalizirajmoSiNewsletterSearchParams>;
 }) {
+  const currentUser = await getCurrentUser();
   const filters = parseLegalizirajmoSiNewsletterFilters(await searchParams);
   const queryString = buildLegalizirajmoSiNewsletterQueryString(filters);
   const whereClause = buildLegalizirajmoSiNewsletterWhere(filters);
+  const canDelete =
+    currentUser?.role === "admin" && !shouldForcePasswordChange(currentUser);
 
   const exportCsvHref = queryString
     ? `/api/admin/legalizirajmo-si-newsletter/export/csv?${queryString}`
@@ -71,6 +75,7 @@ export default async function AdminLegalizirajmoSiNewsletterPage({
       </form>
 
       <LegalizirajmoSiNewsletterManagement
+        canDelete={canDelete}
         rows={rows.map((row) => ({
           ...row,
           createdAt: row.createdAt.toISOString(),
