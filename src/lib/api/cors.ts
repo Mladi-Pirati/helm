@@ -16,6 +16,7 @@ const allowedHostSuffixes = [
   "mladipirati.si",
   "prt.si",
   "piratskastranka.si",
+  "localhost"
 ] as const;
 
 type CorsOptions = {

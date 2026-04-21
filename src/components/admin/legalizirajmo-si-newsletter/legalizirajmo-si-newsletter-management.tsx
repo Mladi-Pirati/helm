@@ -64,26 +64,6 @@ export function LegalizirajmoSiNewsletterManagement({
         </span>
       ),
     },
-    {
-      accessorKey: "updatedAt",
-      header: "Updated",
-      size: 180,
-      cell: ({ row }) => (
-        <span className="block truncate text-muted-foreground">
-          {formatDateTime(row.original.updatedAt)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "id",
-      header: "ID",
-      size: 260,
-      cell: ({ row }) => (
-        <code className="block truncate text-[11px] text-muted-foreground">
-          {row.original.id}
-        </code>
-      ),
-    },
   ];
 
   // eslint-disable-next-line react-hooks/incompatible-library
