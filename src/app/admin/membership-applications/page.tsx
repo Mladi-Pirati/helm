@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -18,6 +18,7 @@ import {
   type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
+import { buildMembershipApplicationsWhere } from "@/lib/membership-applications-query";
 
 function FilterSelect({
   children,
@@ -46,42 +47,14 @@ export default async function AdminMembershipApplicationsPage({
 }) {
   const filters = parseMembershipApplicationsFilters(await searchParams);
   const queryString = buildMembershipApplicationsQueryString(filters);
-  const whereClauses: SQL<unknown>[] = [];
+  const whereClause = buildMembershipApplicationsWhere(filters);
 
-  if (filters.q) {
-    const searchPattern = `%${filters.q}%`;
-
-    whereClauses.push(
-      or(
-        ilike(mladiPiratiMembershipApplications.fullName, searchPattern),
-        ilike(mladiPiratiMembershipApplications.email, searchPattern),
-        ilike(
-          mladiPiratiMembershipApplications.cityAndPostalCode,
-          searchPattern,
-        ),
-        ilike(mladiPiratiMembershipApplications.phone, searchPattern),
-      )!,
-    );
-  }
-
-  if (filters.status) {
-    whereClauses.push(
-      eq(mladiPiratiMembershipApplications.status, filters.status),
-    );
-  }
-
-  if (filters.mode) {
-    whereClauses.push(
-      eq(mladiPiratiMembershipApplications.participationMode, filters.mode),
-    );
-  }
-
-  const whereClause =
-    whereClauses.length === 0
-      ? undefined
-      : whereClauses.length === 1
-        ? whereClauses[0]
-        : and(...whereClauses);
+  const exportCsvHref = queryString
+    ? `/api/admin/membership-applications/export/csv?${queryString}`
+    : "/api/admin/membership-applications/export/csv";
+  const exportPdfHref = queryString
+    ? `/api/admin/membership-applications/export/pdf?${queryString}`
+    : "/api/admin/membership-applications/export/pdf";
 
   const baseQuery = db
     .select({
@@ -104,11 +77,21 @@ export default async function AdminMembershipApplicationsPage({
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-1">
-        <h1 className="text-xl font-semibold">Membership applications</h1>
-        <p className="text-xs text-muted-foreground">
-          Review applications from a stable server-filtered queue.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid gap-1">
+          <h1 className="text-xl font-semibold">Membership applications</h1>
+          <p className="text-xs text-muted-foreground">
+            Review applications from a stable server-filtered queue.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <a href={exportCsvHref}>Export CSV</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={exportPdfHref}>Export PDFs (ZIP)</a>
+          </Button>
+        </div>
       </div>
 
       <form className="grid gap-3 rounded-none border p-4 sm:grid-cols-4">
