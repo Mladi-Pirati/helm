@@ -8,12 +8,21 @@ import { legalizirajmoSiNewsletterSchema } from "@/lib/validation/legalizirajmo-
 const NEWSLETTER_METHODS = ["POST", "OPTIONS"] as const;
 
 function isUniqueViolation(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "23505"
-  );
+  let currentError: unknown = error;
+
+  while (typeof currentError === "object" && currentError !== null) {
+    if ("code" in currentError && currentError.code === "23505") {
+      return true;
+    }
+
+    if (!("cause" in currentError)) {
+      return false;
+    }
+
+    currentError = currentError.cause;
+  }
+
+  return false;
 }
 
 export async function POST(request: Request) {
