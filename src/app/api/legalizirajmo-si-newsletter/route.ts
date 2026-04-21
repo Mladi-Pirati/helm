@@ -15,6 +15,22 @@ const NEWSLETTER_RATE_LIMIT = {
   windowMs: 10 * 60 * 1000,
 } as const;
 
+type NewsletterLogDetails = Record<
+  string,
+  boolean | number | string | string[] | null | undefined
+>;
+
+function logNewsletterEvent(
+  level: "info" | "warn" | "error",
+  message: string,
+  details: NewsletterLogDetails,
+) {
+  console[level]("[newsletter-subscribe]", {
+    message,
+    ...details,
+  });
+}
+
 function isUniqueViolation(error: unknown) {
   let currentError: unknown = error;
 
@@ -123,6 +139,7 @@ export async function POST(request: Request) {
     request,
     NEWSLETTER_RATE_LIMIT,
   );
+  const clientIp = getRequestClientIp(request);
 
   let body: unknown;
 
@@ -144,7 +161,25 @@ export async function POST(request: Request) {
   const { hasCaptchaToken, captchaToken } = getCaptchaToken(body);
   const parsedBody = legalizirajmoSiNewsletterSchema.safeParse(body);
 
+  if (rateLimited || hasCaptchaToken) {
+    logNewsletterEvent("info", "Parsed newsletter signup request.", {
+      rateLimited,
+      retryAfterSeconds,
+      hasCaptchaToken,
+      captchaTokenPresent: captchaToken !== null,
+      clientIpPresent: clientIp !== null,
+    });
+  }
+
   if (!parsedBody.success) {
+    if (rateLimited || hasCaptchaToken) {
+      logNewsletterEvent("warn", "Returning validation error response.", {
+        branch: "validation_failed",
+        hasCaptchaToken,
+        rateLimited,
+      });
+    }
+
     return withCors(
       request,
       NextResponse.json(
@@ -162,17 +197,35 @@ export async function POST(request: Request) {
 
   if (hasCaptchaToken) {
     if (!captchaToken) {
+      logNewsletterEvent(
+        "warn",
+        "Returning captcha_invalid for empty captcha.",
+        {
+          branch: "captcha_invalid",
+          reason: "missing_token_value",
+          rateLimited,
+        },
+      );
+
       return createCaptchaInvalidResponse(request);
     }
 
-    const turnstileVerification = await verifyTurnstileToken(captchaToken, {
-      remoteIp: getRequestClientIp(request),
-    });
+    let turnstileVerification: Awaited<ReturnType<typeof verifyTurnstileToken>>;
 
-    if (!turnstileVerification.ok) {
-      if (turnstileVerification.reason === "invalid") {
-        return createCaptchaInvalidResponse(request);
-      }
+    try {
+      turnstileVerification = await verifyTurnstileToken(captchaToken, {
+        remoteIp: clientIp,
+      });
+    } catch (error) {
+      logNewsletterEvent(
+        "error",
+        "Turnstile verification threw unexpectedly.",
+        {
+          branch: "captcha_verification_unavailable",
+          errorMessage:
+            error instanceof Error ? error.message : "Unknown error",
+        },
+      );
 
       return withCors(
         request,
@@ -186,10 +239,54 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!turnstileVerification.ok) {
+      if (turnstileVerification.reason === "invalid") {
+        logNewsletterEvent("warn", "Returning captcha_invalid response.", {
+          branch: "captcha_invalid",
+          errorCodes: turnstileVerification.errorCodes,
+          hostname: turnstileVerification.hostname,
+          rateLimited,
+        });
+
+        return createCaptchaInvalidResponse(request);
+      }
+
+      logNewsletterEvent("error", "Captcha verification is unavailable.", {
+        branch: "captcha_verification_unavailable",
+        cause: turnstileVerification.cause,
+        errorCodes: turnstileVerification.errorCodes,
+        hostname: turnstileVerification.hostname,
+        status: turnstileVerification.status,
+      });
+
+      return withCors(
+        request,
+        NextResponse.json(
+          {
+            error: "Unable to verify captcha.",
+          },
+          { status: 500 },
+        ),
+        { methods: NEWSLETTER_METHODS },
+      );
+    }
+
+    logNewsletterEvent("info", "Captcha verification succeeded.", {
+      branch: "captcha_valid",
+      hostname: turnstileVerification.hostname,
+      rateLimited,
+    });
+
     hasValidCaptcha = true;
   }
 
   if (rateLimited && !hasValidCaptcha) {
+    logNewsletterEvent("info", "Returning captcha_required response.", {
+      branch: "captcha_required",
+      retryAfterSeconds,
+      hasCaptchaToken,
+    });
+
     return createCaptchaRequiredResponse(request, retryAfterSeconds);
   }
 
@@ -198,6 +295,13 @@ export async function POST(request: Request) {
       email: parsedBody.data.email,
       rawPayload: getRawPayload(body),
     });
+
+    if (hasValidCaptcha || rateLimited) {
+      logNewsletterEvent("info", "Newsletter signup succeeded.", {
+        branch: hasValidCaptcha ? "subscribed_after_captcha" : "subscribed",
+        rateLimited,
+      });
+    }
 
     return withCors(
       request,
@@ -208,6 +312,18 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     if (isUniqueViolation(error)) {
+      if (hasValidCaptcha || rateLimited) {
+        logNewsletterEvent(
+          "info",
+          "Returning duplicate subscription response.",
+          {
+            branch: "duplicate",
+            rateLimited,
+            hasValidCaptcha,
+          },
+        );
+      }
+
       return withCors(
         request,
         NextResponse.json(
@@ -222,6 +338,12 @@ export async function POST(request: Request) {
         { methods: NEWSLETTER_METHODS },
       );
     }
+
+    logNewsletterEvent("error", "Unexpected newsletter subscription failure.", {
+      branch: "internal_error",
+      hasValidCaptcha,
+      rateLimited,
+    });
 
     return withCors(
       request,
