@@ -41,9 +41,16 @@ Copy `.env.example` to `.env` and provide:
 
 - `DATABASE_URL`
 - `AUTH_SECRET`
+- `TURNSTILE_SECRET_KEY`
 - `INITIAL_ADMIN_NAME`
 - `INITIAL_ADMIN_USERNAME`
 - `INITIAL_ADMIN_PASSWORD`
+
+Optional:
+
+- `TURNSTILE_EXPECTED_HOSTNAME`
+
+`TURNSTILE_SECRET_KEY` is used by the newsletter subscribe API to verify Cloudflare Turnstile tokens server-side. `TURNSTILE_EXPECTED_HOSTNAME` can be set to enforce that successful Turnstile challenges were solved for the expected frontend hostname.
 
 ## Auth Overview
 
