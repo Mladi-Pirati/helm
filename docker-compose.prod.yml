@@ -60,6 +60,8 @@ services:
       PORT: 3000
       AUTH_TRUST_HOST: "true"
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      ADMIN_HOST: ${ADMIN_HOST}
+      DISCORD_WEBHOOK: ${DISCORD_WEBHOOK}
     depends_on:
       db:
         condition: service_healthy
