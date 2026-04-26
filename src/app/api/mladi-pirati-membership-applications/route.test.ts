@@ -30,6 +30,11 @@ let turnstileResult: TurnstileResult = { ok: true };
 let insertError: unknown = null;
 let insertedValues: Array<Record<string, unknown>> = [];
 let turnstileCalls: Array<{ token: string; remoteIp: string | null }> = [];
+let fetchCalls: Array<{
+  input: Parameters<typeof fetch>[0];
+  init: Parameters<typeof fetch>[1];
+}> = [];
+let fetchResponse: Response | Error = new Response(null, { status: 204 });
 let createdApplication = {
   id: "application-123",
   status: "new",
@@ -42,6 +47,9 @@ const membershipApplicationsTable = {
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
+const originalDiscordWebhook = process.env.DISCORD_WEBHOOK;
+const originalAdminHost = process.env.ADMIN_HOST;
+const originalFetch = globalThis.fetch;
 
 const validMembershipApplicationPayload = {
   fullName: "Ada Lovelace",
@@ -122,6 +130,44 @@ function createRequest(body: unknown, headers: HeadersInit = {}) {
   );
 }
 
+function getDiscordPayload() {
+  expect(fetchCalls).toHaveLength(1);
+  const body = fetchCalls[0].init?.body;
+  expect(typeof body).toBe("string");
+
+  return JSON.parse(body as string) as {
+    embeds: Array<{
+      title: string;
+      description?: string;
+      url?: string;
+      color?: number;
+      timestamp?: string;
+      fields: Array<{
+        name: string;
+        value: string;
+        inline?: boolean;
+      }>;
+    }>;
+  };
+}
+
+function getExpectedAge(dateOfBirth: string) {
+  const [birthYear, birthMonth, birthDay] = dateOfBirth.split("-").map(Number);
+  const today = new Date();
+  let age = today.getFullYear() - birthYear;
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+
+  if (
+    currentMonth < birthMonth ||
+    (currentMonth === birthMonth && currentDay < birthDay)
+  ) {
+    age -= 1;
+  }
+
+  return age;
+}
+
 beforeEach(() => {
   rateLimitResult = {
     rateLimited: false,
@@ -131,16 +177,45 @@ beforeEach(() => {
   insertError = null;
   insertedValues = [];
   turnstileCalls = [];
+  fetchCalls = [];
+  fetchResponse = new Response(null, { status: 204 });
   createdApplication = {
     id: "application-123",
     status: "new",
   };
+  process.env.DISCORD_WEBHOOK = "https://discord.test/webhook";
+  process.env.ADMIN_HOST = "https://admin.test/";
+  globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+    fetchCalls.push({
+      input: args[0],
+      init: args[1],
+    });
+
+    if (fetchResponse instanceof Error) {
+      throw fetchResponse;
+    }
+
+    return fetchResponse;
+  }) as typeof fetch;
   console.info = (() => {}) as typeof console.info;
   console.warn = (() => {}) as typeof console.warn;
   console.error = (() => {}) as typeof console.error;
 });
 
 afterEach(() => {
+  if (originalDiscordWebhook === undefined) {
+    delete process.env.DISCORD_WEBHOOK;
+  } else {
+    process.env.DISCORD_WEBHOOK = originalDiscordWebhook;
+  }
+
+  if (originalAdminHost === undefined) {
+    delete process.env.ADMIN_HOST;
+  } else {
+    process.env.ADMIN_HOST = originalAdminHost;
+  }
+
+  globalThis.fetch = originalFetch;
   console.info = originalConsoleInfo;
   console.warn = originalConsoleWarn;
   console.error = originalConsoleError;
@@ -169,6 +244,45 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
       },
     ]);
     expect(turnstileCalls).toHaveLength(0);
+
+    const discordPayload = getDiscordPayload();
+    expect(fetchCalls[0].input).toBe("https://discord.test/webhook");
+    expect(fetchCalls[0].init?.method).toBe("POST");
+    expect(discordPayload.embeds).toHaveLength(1);
+    expect(discordPayload.embeds[0]).toMatchObject({
+      title: "New Membership Application",
+      description: "A new membership application is ready for review.",
+      url: "https://admin.test/admin/membership-applications",
+      color: 0x22c55e,
+      fields: [
+        {
+          name: "Name",
+          value: "Ada Lovelace",
+          inline: true,
+        },
+        {
+          name: "Age",
+          value: String(
+            getExpectedAge(validMembershipApplicationPayload.dateOfBirth),
+          ),
+          inline: true,
+        },
+        {
+          name: "Region",
+          value: "Osrednjeslovenska",
+          inline: true,
+        },
+      ],
+    });
+    expect(discordPayload.embeds[0].timestamp).toEqual(expect.any(String));
+    expect(
+      Number.isNaN(Date.parse(discordPayload.embeds[0].timestamp ?? "")),
+    ).toBe(false);
+    expect(JSON.stringify(discordPayload)).not.toContain("1994-12-10");
+    expect(JSON.stringify(discordPayload)).not.toContain("ada@example.com");
+    expect(JSON.stringify(discordPayload)).not.toContain("Pirate Street 10");
+    expect(JSON.stringify(discordPayload)).not.toContain("Ljubljana");
+    expect(JSON.stringify(discordPayload)).not.toContain("rawPayload");
   });
 
   test("returns 429 captcha_required when the normal rate limit is exceeded", async () => {
@@ -195,6 +309,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(body.message.length).toBeGreaterThan(0);
     expect(insertedValues).toHaveLength(0);
     expect(turnstileCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
   });
 
   test("allows a challenged retry with a valid captcha to bypass the normal rate limit", async () => {
@@ -238,6 +353,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
         rawPayload: validMembershipApplicationPayload,
       },
     ]);
+    expect(fetchCalls).toHaveLength(1);
   });
 
   test("returns 400 captcha_invalid when captcha verification fails", async () => {
@@ -269,6 +385,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(body.code).toBe("captcha_invalid");
     expect(body.message.length).toBeGreaterThan(0);
     expect(insertedValues).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
   });
 
   test("returns 400 captcha_invalid when captchaToken is blank", async () => {
@@ -293,6 +410,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     });
     expect(turnstileCalls).toHaveLength(0);
     expect(insertedValues).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
   });
 
   test("returns 500 when captcha verification is unavailable", async () => {
@@ -323,6 +441,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
       error: "Unable to verify captcha.",
     });
     expect(insertedValues).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
   });
 
   test("preserves the existing validation response", async () => {
@@ -343,6 +462,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     });
     expect(insertedValues).toHaveLength(0);
     expect(turnstileCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
   });
 
   test("preserves the existing 500 response for unexpected insert failures", async () => {
@@ -358,5 +478,61 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(await response.json()).toEqual({
       error: "Unable to create membership application.",
     });
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  test("returns 201 when the Discord webhook request fails", async () => {
+    const { POST } = await routeModulePromise;
+
+    fetchResponse = new Error("discord failed");
+
+    const response = await POST(
+      createRequest(validMembershipApplicationPayload),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: "application-123",
+      status: "new",
+    });
+    expect(fetchCalls).toHaveLength(1);
+  });
+
+  test("returns 201 and sends a Discord embed without a URL when ADMIN_HOST is missing", async () => {
+    const { POST } = await routeModulePromise;
+
+    delete process.env.ADMIN_HOST;
+
+    const response = await POST(
+      createRequest(validMembershipApplicationPayload),
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: "application-123",
+      status: "new",
+    });
+
+    const discordPayload = getDiscordPayload();
+    expect(discordPayload.embeds[0].url).toBeUndefined();
+    expect(discordPayload.embeds[0].fields).toEqual([
+      {
+        name: "Name",
+        value: "Ada Lovelace",
+        inline: true,
+      },
+      {
+        name: "Age",
+        value: String(
+          getExpectedAge(validMembershipApplicationPayload.dateOfBirth),
+        ),
+        inline: true,
+      },
+      {
+        name: "Region",
+        value: "Osrednjeslovenska",
+        inline: true,
+      },
+    ]);
   });
 });

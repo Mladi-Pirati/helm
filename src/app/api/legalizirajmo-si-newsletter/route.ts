@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { legalizirajmoSiNewsletterSubscriptions } from "@/db/schema";
 import { createCorsPreflightResponse, withCors } from "@/lib/api/cors";
+import { sendDiscordEmbedNotification } from "@/lib/api/discord-webhook";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getRequestClientIp } from "@/lib/api/request-client-ip";
 import { verifyTurnstileToken } from "@/lib/api/turnstile";
@@ -90,6 +91,11 @@ function getRawPayload(body: unknown) {
   delete rawPayload.captchaToken;
 
   return rawPayload;
+}
+
+function redactEmailDomain(email: string) {
+  const [localPart] = email.split("@");
+  return `${localPart}@<redacted>`;
 }
 
 function createCaptchaRequiredResponse(
@@ -302,6 +308,20 @@ export async function POST(request: Request) {
         rateLimited,
       });
     }
+
+    await sendDiscordEmbedNotification({
+      title: "New Newsletter Signup",
+      description: "A new legalizirajmo.si newsletter signup was received.",
+      adminPath: "/admin/legalizirajmo-si-newsletter",
+      color: 0xf59e0b,
+      fields: [
+        {
+          name: "Email",
+          value: redactEmailDomain(parsedBody.data.email),
+          inline: true,
+        },
+      ],
+    });
 
     return withCors(
       request,

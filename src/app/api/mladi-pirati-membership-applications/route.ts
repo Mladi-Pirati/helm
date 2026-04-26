@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import { createCorsPreflightResponse, withCors } from "@/lib/api/cors";
+import { sendDiscordEmbedNotification } from "@/lib/api/discord-webhook";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getRequestClientIp } from "@/lib/api/request-client-ip";
 import { verifyTurnstileToken } from "@/lib/api/turnstile";
@@ -72,6 +73,25 @@ function getRawPayload(body: unknown) {
   delete rawPayload.captchaToken;
 
   return rawPayload;
+}
+
+function getAgeFromDateOfBirth(dateOfBirth: string) {
+  const [birthYear, birthMonth, birthDay] = dateOfBirth
+    .split("-")
+    .map(Number);
+  const today = new Date();
+  let age = today.getFullYear() - birthYear;
+  const currentMonth = today.getMonth() + 1;
+  const currentDay = today.getDate();
+
+  if (
+    currentMonth < birthMonth ||
+    (currentMonth === birthMonth && currentDay < birthDay)
+  ) {
+    age -= 1;
+  }
+
+  return age;
 }
 
 function createCaptchaRequiredResponse(
@@ -345,6 +365,30 @@ export async function POST(request: Request) {
         },
       );
     }
+
+    await sendDiscordEmbedNotification({
+      title: "New Membership Application",
+      description: "A new membership application is ready for review.",
+      adminPath: "/admin/membership-applications",
+      color: 0x22c55e,
+      fields: [
+        {
+          name: "Name",
+          value: fullName,
+          inline: true,
+        },
+        {
+          name: "Age",
+          value: String(getAgeFromDateOfBirth(dateOfBirth)),
+          inline: true,
+        },
+        {
+          name: "Region",
+          value: residenceRegion,
+          inline: true,
+        },
+      ],
+    });
 
     return withCors(
       request,
