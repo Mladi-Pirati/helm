@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteNewsletterSubscriptionDialog } from "@/components/admin/legalizirajmo-si-newsletter/delete-newsletter-subscription-dialog";
+import { formatSlovenianDateTime } from "@/lib/date-format";
 
 export type LegalizirajmoSiNewsletterListRow = {
   id: string;
@@ -30,13 +31,8 @@ export type LegalizirajmoSiNewsletterListRow = {
   updatedAt: string;
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 function formatDateTime(value: string) {
-  return dateTimeFormatter.format(new Date(value));
+  return formatSlovenianDateTime(new Date(value));
 }
 
 export function LegalizirajmoSiNewsletterManagement({

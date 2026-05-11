@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DeleteMembershipApplicationDialog } from "@/components/admin/membership-applications/delete-membership-application-dialog";
+import { formatSlovenianDateTime } from "@/lib/date-format";
 import {
   buildMembershipApplicationDetailsHref,
   getMembershipApplicationStatusVariant,
@@ -46,13 +47,8 @@ export type MembershipApplicationListRow = {
   createdAt: string;
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 function formatDateTime(value: string) {
-  return dateTimeFormatter.format(new Date(value));
+  return formatSlovenianDateTime(new Date(value));
 }
 
 export function MembershipApplicationsManagement({
