@@ -7,11 +7,14 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import { format } from "date-fns";
 import path from "node:path";
 
 import {
-  membershipApplicationStatusLabels,
+  formatSlovenianDate,
+  formatSlovenianDateTime,
+  parseDateOnly,
+} from "@/lib/date-format";
+import {
   participationModeLabels,
   type MembershipApplicationStatus,
   type ParticipationMode,
@@ -53,6 +56,13 @@ export type MembershipApplicationPdfRow = {
   status: MembershipApplicationStatus;
   createdAt: Date;
   updatedAt: Date;
+};
+
+const pdfStatusLabels: Record<MembershipApplicationStatus, string> = {
+  new: "Nova",
+  in_review: "V obravnavi",
+  approved: "Odobrena",
+  rejected: "Zavrnjena",
 };
 
 const styles = StyleSheet.create({
@@ -184,14 +194,10 @@ function Field({
       {value ? (
         <Text style={styles.fieldValue}>{value}</Text>
       ) : (
-        <Text style={styles.fieldValueMuted}>Not provided</Text>
+        <Text style={styles.fieldValueMuted}>Ni navedeno</Text>
       )}
     </View>
   );
-}
-
-function parseDateOnly(value: string): Date {
-  return new Date(`${value}T00:00:00`);
 }
 
 export function MembershipApplicationPdfDocument({
@@ -203,79 +209,81 @@ export function MembershipApplicationPdfDocument({
   logo: Buffer;
   generatedAt: Date;
 }) {
-  const submittedAt = format(row.createdAt, "PPP p");
-  const updatedAt = format(row.updatedAt, "PPP p");
-  const birthDate = format(parseDateOnly(row.dateOfBirth), "PPP");
-  const generatedAtLabel = format(generatedAt, "PPP p");
+  const submittedAt = formatSlovenianDateTime(row.createdAt);
+  const updatedAt = formatSlovenianDateTime(row.updatedAt);
+  const birthDate = formatSlovenianDate(parseDateOnly(row.dateOfBirth));
+  const generatedAtLabel = formatSlovenianDateTime(generatedAt);
 
   return (
     <Document
-      title={`Membership application — ${row.fullName}`}
+      title={`Vloga za članstvo - ${row.fullName}`}
       author="Mladi Pirati"
+      language="sl-SI"
     >
       <Page size="A4" style={styles.page}>
         <View style={styles.header} fixed>
           <PdfImage style={styles.logo} src={logo} />
           <View style={styles.headerTextBlock}>
             <Text style={styles.title}>
-              Mladi Pirati — vloga za članstvo
+              Mladi Pirati - vloga za članstvo
             </Text>
-            <Text style={styles.subtitle}>Submitted {submittedAt}</Text>
+            <Text style={styles.subtitle}>Oddano {submittedAt}</Text>
           </View>
-          <Text style={styles.statusPill}>
-            {membershipApplicationStatusLabels[row.status]}
-          </Text>
+          <Text style={styles.statusPill}>{pdfStatusLabels[row.status]}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Identity and contact</Text>
+          <Text style={styles.sectionTitle}>Identiteta in kontakt</Text>
           <View style={styles.grid}>
-            <Field label="Full name" value={row.fullName} />
-            <Field label="Email" value={row.email} />
-            <Field label="Phone" value={row.phone} />
-            <Field label="Discord username" value={row.discordUsername} />
+            <Field label="Ime in priimek" value={row.fullName} />
+            <Field label="E-pošta" value={row.email} />
+            <Field label="Telefon" value={row.phone} />
+            <Field label="Discord uporabniško ime" value={row.discordUsername} />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Address and birth</Text>
+          <Text style={styles.sectionTitle}>Naslov in rojstvo</Text>
           <View style={styles.grid}>
-            <Field label="Date of birth" value={birthDate} />
-            <Field label="Place of birth" value={row.placeOfBirth} />
-            <Field label="Street address" value={row.streetAddress} />
-            <Field label="City and postal code" value={row.cityAndPostalCode} />
-            <Field label="Residence region" value={row.residenceRegion} />
+            <Field label="Datum rojstva" value={birthDate} />
+            <Field label="Kraj rojstva" value={row.placeOfBirth} />
+            <Field label="Naslov" value={row.streetAddress} />
+            <Field
+              label="Kraj in poštna številka"
+              value={row.cityAndPostalCode}
+            />
+            <Field label="Regija bivanja" value={row.residenceRegion} />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Participation and motivation</Text>
+          <Text style={styles.sectionTitle}>Sodelovanje in motivacija</Text>
           <View style={styles.grid}>
             <Field
-              label="Participation mode"
+              label="Način sodelovanja"
               value={participationModeLabels[row.participationMode]}
               full
             />
             <View style={styles.cellFull}>
-              <Text style={styles.fieldLabel}>Motivation</Text>
+              <Text style={styles.fieldLabel}>Motivacija</Text>
               {row.motivation ? (
                 <Text style={styles.motivation}>{row.motivation}</Text>
               ) : (
-                <Text style={styles.fieldValueMuted}>Not provided</Text>
+                <Text style={styles.fieldValueMuted}>Ni navedeno</Text>
               )}
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Consents and metadata</Text>
+          <Text style={styles.sectionTitle}>Soglasja in metapodatki</Text>
           <View style={styles.consentRow}>
             <Text style={styles.consentMark}>
               {row.consentsToDataProcessing ? "\u2713" : "\u2717"}
             </Text>
             <Text style={styles.fieldValue}>
-              Data processing —{" "}
-              {row.consentsToDataProcessing ? "Granted" : "Missing"}
+              Obdelava osebnih podatkov -{" "}
+              {row.consentsToDataProcessing ? "Podano" : "Manjka"}
             </Text>
           </View>
           <View style={styles.consentRow}>
@@ -283,21 +291,21 @@ export function MembershipApplicationPdfDocument({
               {row.acceptsStatuteAndProgram ? "\u2713" : "\u2717"}
             </Text>
             <Text style={styles.fieldValue}>
-              Statute and program —{" "}
-              {row.acceptsStatuteAndProgram ? "Accepted" : "Missing"}
+              Statut in program -{" "}
+              {row.acceptsStatuteAndProgram ? "Sprejeto" : "Manjka"}
             </Text>
           </View>
           <View style={[styles.grid, { marginTop: 8 }]}>
-            <Field label="Application ID" value={row.id} />
-            <Field label="Last updated" value={updatedAt} />
+            <Field label="ID vloge" value={row.id} />
+            <Field label="Zadnja posodobitev" value={updatedAt} />
           </View>
         </View>
 
         <View style={styles.footer} fixed>
-          <Text>Generated {generatedAtLabel}</Text>
+          <Text>Ustvarjeno {generatedAtLabel}</Text>
           <Text
             render={({ pageNumber, totalPages }) =>
-              `Page ${pageNumber} / ${totalPages}`
+              `Stran ${pageNumber} / ${totalPages}`
             }
           />
         </View>

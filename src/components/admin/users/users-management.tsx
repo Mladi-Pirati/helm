@@ -13,6 +13,7 @@ import { DeleteUserDialog } from "@/components/admin/users/delete-user-dialog";
 import { EditUserSheet } from "@/components/admin/users/edit-user-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatSlovenianDateTime } from "@/lib/date-format";
 import {
   Table,
   TableBody,
@@ -29,11 +30,6 @@ export type UserRow = {
   role: UserRole;
   createdAt: string;
 };
-
-const createdAtFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 export function UsersManagement({
   currentUserId,
@@ -68,7 +64,7 @@ export function UsersManagement({
       accessorKey: "createdAt",
       header: "Created at",
       cell: ({ row }) =>
-        createdAtFormatter.format(new Date(row.original.createdAt)),
+        formatSlovenianDateTime(new Date(row.original.createdAt)),
     },
     {
       id: "actions",

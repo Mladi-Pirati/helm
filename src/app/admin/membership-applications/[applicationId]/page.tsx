@@ -16,6 +16,11 @@ import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/session";
 import {
+  formatSlovenianDate,
+  formatSlovenianDateTime,
+  parseDateOnly,
+} from "@/lib/date-format";
+import {
   buildMembershipApplicationsListHref,
   buildMembershipApplicationsQueryString,
   getMembershipApplicationStatusVariant,
@@ -27,21 +32,12 @@ import {
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 
-const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
-const dateOnlyFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "long",
-});
-
 function formatDateTime(value: Date) {
-  return dateTimeFormatter.format(value);
+  return formatSlovenianDateTime(value);
 }
 
 function formatDateOnly(value: string) {
-  return dateOnlyFormatter.format(new Date(`${value}T00:00:00`));
+  return formatSlovenianDate(parseDateOnly(value));
 }
 
 function DetailItem({
