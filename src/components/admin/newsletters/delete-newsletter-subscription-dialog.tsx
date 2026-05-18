@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { deleteLegalizirajmoSiNewsletterSubscriptionAction } from "@/actions/legalizirajmo-si-newsletter";
+import { deleteNewsletterSubscriptionAction } from "@/actions/newsletters";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -15,12 +15,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { LegalizirajmoSiNewsletterListRow } from "./legalizirajmo-si-newsletter-management";
+import type { NewsletterSubscriptionListRow } from "./newsletter-subscriptions-management";
 
 export function DeleteNewsletterSubscriptionDialog({
   row,
 }: {
-  row: LegalizirajmoSiNewsletterListRow;
+  row: NewsletterSubscriptionListRow;
 }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -31,9 +31,7 @@ export function DeleteNewsletterSubscriptionDialog({
     setServerMessage(null);
 
     startTransition(async () => {
-      const result = await deleteLegalizirajmoSiNewsletterSubscriptionAction(
-        row.id,
-      );
+      const result = await deleteNewsletterSubscriptionAction(row.id);
 
       if (!result.ok) {
         setServerMessage(result.message);
@@ -56,8 +54,8 @@ export function DeleteNewsletterSubscriptionDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete subscription</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete {row.email} from the newsletter subscriptions list
-            permanently. This action cannot be undone.
+            Delete {row.email} from this newsletter permanently. This action
+            cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {serverMessage ? (

@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 type RateLimitResult = {
   rateLimited: boolean;
@@ -43,6 +51,12 @@ let createdApplication = {
 const membershipApplicationsTable = {
   id: "id",
   status: "status",
+};
+const newslettersTable = {
+  slug: "slug",
+};
+const newsletterSubscriptionsTable = {
+  id: "id",
 };
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
@@ -110,6 +124,8 @@ const db = {
 mock.module("@/db", () => ({ db }));
 mock.module("@/db/schema", () => ({
   mladiPiratiMembershipApplications: membershipApplicationsTable,
+  newsletters: newslettersTable,
+  newsletterSubscriptions: newsletterSubscriptionsTable,
 }));
 mock.module("@/lib/api/rate-limit", () => ({ checkRateLimit }));
 mock.module("@/lib/api/turnstile", () => ({ verifyTurnstileToken }));
@@ -219,6 +235,10 @@ afterEach(() => {
   console.info = originalConsoleInfo;
   console.warn = originalConsoleWarn;
   console.error = originalConsoleError;
+});
+
+afterAll(() => {
+  mock.restore();
 });
 
 describe("POST /api/mladi-pirati-membership-applications", () => {

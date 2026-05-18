@@ -56,6 +56,9 @@ export default async function AdminMembershipApplicationsPage({
   const exportCsvHref = queryString
     ? `/api/admin/membership-applications/export/csv?${queryString}`
     : "/api/admin/membership-applications/export/csv";
+  const exportEmailsHref = queryString
+    ? `/api/admin/membership-applications/export/emails?${queryString}`
+    : "/api/admin/membership-applications/export/emails";
   const exportPdfHref = queryString
     ? `/api/admin/membership-applications/export/pdf?${queryString}`
     : "/api/admin/membership-applications/export/pdf";
@@ -88,9 +91,12 @@ export default async function AdminMembershipApplicationsPage({
             Review applications from a stable server-filtered queue.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
             <a href={exportCsvHref}>Export CSV</a>
+          </Button>
+          <Button asChild variant="outline">
+            <a href={exportEmailsHref}>Export Emails CSV</a>
           </Button>
           <Button asChild variant="outline">
             <a href={exportPdfHref}>Export PDFs (ZIP)</a>

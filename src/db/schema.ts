@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -90,12 +91,32 @@ export const mladiPiratiMembershipApplications = pgTable(
   },
 );
 
-export const legalizirajmoSiNewsletterSubscriptions = pgTable(
-  "legalizirajmo_si_newsletter_subscriptions",
+export const newsletters = pgTable(
+  "newsletters",
   {
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    description: text("description").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => ({
+    slugUniqueIndex: uniqueIndex("newsletters_slug_unique").on(
+      sql`lower(${table.slug})`,
+    ),
+  }),
+);
+
+export const newsletterSubscriptions = pgTable(
+  "newsletter_subscriptions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    newsletterId: text("newsletter_id").notNull(),
     email: text("email").notNull(),
     rawPayload: jsonb("raw_payload")
       .$type<Record<string, unknown>>()
@@ -104,9 +125,18 @@ export const legalizirajmoSiNewsletterSubscriptions = pgTable(
     ...timestamps,
   },
   (table) => ({
-    emailUniqueIndex: uniqueIndex(
-      "legalizirajmo_si_newsletter_subscriptions_email_unique",
-    ).on(sql`lower(${table.email})`),
+    newsletterReference: foreignKey({
+      columns: [table.newsletterId],
+      foreignColumns: [newsletters.id],
+      name: "newsletter_subscriptions_newsletter_id_newsletters_id_fk",
+    }).onDelete("cascade"),
+    emailUniqueIndex: uniqueIndex("newsletter_subscriptions_email_unique").on(
+      table.newsletterId,
+      sql`lower(${table.email})`,
+    ),
+    newsletterIdIndex: index("newsletter_subscriptions_newsletter_id_idx").on(
+      table.newsletterId,
+    ),
   }),
 );
 
@@ -142,9 +172,10 @@ export type MembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferSelect;
 export type NewMembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferInsert;
-export type LegalizirajmoSiNewsletterSubscription =
-  typeof legalizirajmoSiNewsletterSubscriptions.$inferSelect;
-export type NewLegalizirajmoSiNewsletterSubscription =
-  typeof legalizirajmoSiNewsletterSubscriptions.$inferInsert;
+export type Newsletter = typeof newsletters.$inferSelect;
+export type NewNewsletter = typeof newsletters.$inferInsert;
+export type NewsletterSubscription = typeof newsletterSubscriptions.$inferSelect;
+export type NewNewsletterSubscription =
+  typeof newsletterSubscriptions.$inferInsert;
 export type ApiRateLimitWindow = typeof apiRateLimitWindows.$inferSelect;
 export type NewApiRateLimitWindow = typeof apiRateLimitWindows.$inferInsert;
