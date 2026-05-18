@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
+import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { legalizirajmoSiNewsletterSubscriptions } from "@/db/schema";
+import { newsletters, newsletterSubscriptions } from "@/db/schema";
 import { createCorsPreflightResponse, withCors } from "@/lib/api/cors";
 import { sendDiscordEmbedNotification } from "@/lib/api/discord-webhook";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getRequestClientIp } from "@/lib/api/request-client-ip";
 import { verifyTurnstileToken } from "@/lib/api/turnstile";
-import { legalizirajmoSiNewsletterSchema } from "@/lib/validation/legalizirajmo-si-newsletter";
+import { newsletterSubscriptionSchema } from "@/lib/validation/newsletters";
 
 const NEWSLETTER_METHODS = ["POST", "OPTIONS"] as const;
 const NEWSLETTER_RATE_LIMIT = {
@@ -140,7 +141,47 @@ function createCaptchaInvalidResponse(request: Request) {
   );
 }
 
-export async function POST(request: Request) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  const { slug } = await params;
+  const newsletter = await db.query.newsletters.findFirst({
+    where: sql`lower(${newsletters.slug}) = ${slug.toLowerCase()}`,
+    columns: {
+      id: true,
+      name: true,
+      slug: true,
+      archivedAt: true,
+    },
+  });
+
+  if (!newsletter) {
+    return withCors(
+      request,
+      NextResponse.json(
+        {
+          error: "Newsletter not found.",
+        },
+        { status: 404 },
+      ),
+      { methods: NEWSLETTER_METHODS },
+    );
+  }
+
+  if (newsletter.archivedAt) {
+    return withCors(
+      request,
+      NextResponse.json(
+        {
+          error: "This newsletter is archived and no longer accepts submissions.",
+        },
+        { status: 410 },
+      ),
+      { methods: NEWSLETTER_METHODS },
+    );
+  }
+
   const { rateLimited, retryAfterSeconds } = await checkRateLimit(
     request,
     NEWSLETTER_RATE_LIMIT,
@@ -165,7 +206,7 @@ export async function POST(request: Request) {
   }
 
   const { hasCaptchaToken, captchaToken } = getCaptchaToken(body);
-  const parsedBody = legalizirajmoSiNewsletterSchema.safeParse(body);
+  const parsedBody = newsletterSubscriptionSchema.safeParse(body);
 
   if (rateLimited || hasCaptchaToken) {
     logNewsletterEvent("info", "Parsed newsletter signup request.", {
@@ -174,6 +215,7 @@ export async function POST(request: Request) {
       hasCaptchaToken,
       captchaTokenPresent: captchaToken !== null,
       clientIpPresent: clientIp !== null,
+      newsletterSlug: newsletter.slug,
     });
   }
 
@@ -183,6 +225,7 @@ export async function POST(request: Request) {
         branch: "validation_failed",
         hasCaptchaToken,
         rateLimited,
+        newsletterSlug: newsletter.slug,
       });
     }
 
@@ -210,6 +253,7 @@ export async function POST(request: Request) {
           branch: "captcha_invalid",
           reason: "missing_token_value",
           rateLimited,
+          newsletterSlug: newsletter.slug,
         },
       );
 
@@ -230,6 +274,7 @@ export async function POST(request: Request) {
           branch: "captcha_verification_unavailable",
           errorMessage:
             error instanceof Error ? error.message : "Unknown error",
+          newsletterSlug: newsletter.slug,
         },
       );
 
@@ -252,6 +297,7 @@ export async function POST(request: Request) {
           errorCodes: turnstileVerification.errorCodes,
           hostname: turnstileVerification.hostname,
           rateLimited,
+          newsletterSlug: newsletter.slug,
         });
 
         return createCaptchaInvalidResponse(request);
@@ -263,6 +309,7 @@ export async function POST(request: Request) {
         errorCodes: turnstileVerification.errorCodes,
         hostname: turnstileVerification.hostname,
         status: turnstileVerification.status,
+        newsletterSlug: newsletter.slug,
       });
 
       return withCors(
@@ -281,6 +328,7 @@ export async function POST(request: Request) {
       branch: "captcha_valid",
       hostname: turnstileVerification.hostname,
       rateLimited,
+      newsletterSlug: newsletter.slug,
     });
 
     hasValidCaptcha = true;
@@ -291,13 +339,15 @@ export async function POST(request: Request) {
       branch: "captcha_required",
       retryAfterSeconds,
       hasCaptchaToken,
+      newsletterSlug: newsletter.slug,
     });
 
     return createCaptchaRequiredResponse(request, retryAfterSeconds);
   }
 
   try {
-    await db.insert(legalizirajmoSiNewsletterSubscriptions).values({
+    await db.insert(newsletterSubscriptions).values({
+      newsletterId: newsletter.id,
       email: parsedBody.data.email,
       rawPayload: getRawPayload(body),
     });
@@ -306,15 +356,21 @@ export async function POST(request: Request) {
       logNewsletterEvent("info", "Newsletter signup succeeded.", {
         branch: hasValidCaptcha ? "subscribed_after_captcha" : "subscribed",
         rateLimited,
+        newsletterSlug: newsletter.slug,
       });
     }
 
     await sendDiscordEmbedNotification({
       title: "New Newsletter Signup",
-      description: "A new legalizirajmo.si newsletter signup was received.",
-      adminPath: "/admin/legalizirajmo-si-newsletter",
+      description: `A new ${newsletter.name} newsletter signup was received.`,
+      adminPath: `/admin/newsletters/${newsletter.slug}`,
       color: 0xf59e0b,
       fields: [
+        {
+          name: "Newsletter",
+          value: newsletter.name,
+          inline: true,
+        },
         {
           name: "Email",
           value: redactEmailDomain(parsedBody.data.email),
@@ -340,6 +396,7 @@ export async function POST(request: Request) {
             branch: "duplicate",
             rateLimited,
             hasValidCaptcha,
+            newsletterSlug: newsletter.slug,
           },
         );
       }
@@ -363,6 +420,7 @@ export async function POST(request: Request) {
       branch: "internal_error",
       hasValidCaptcha,
       rateLimited,
+      newsletterSlug: newsletter.slug,
     });
 
     return withCors(

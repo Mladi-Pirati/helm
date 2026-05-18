@@ -7,6 +7,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 
+import { DeleteNewsletterSubscriptionDialog } from "@/components/admin/newsletters/delete-newsletter-subscription-dialog";
 import {
   Card,
   CardContent,
@@ -21,10 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DeleteNewsletterSubscriptionDialog } from "@/components/admin/legalizirajmo-si-newsletter/delete-newsletter-subscription-dialog";
 import { formatSlovenianDateTime } from "@/lib/date-format";
 
-export type LegalizirajmoSiNewsletterListRow = {
+export type NewsletterSubscriptionListRow = {
   id: string;
   email: string;
   createdAt: string;
@@ -35,14 +35,14 @@ function formatDateTime(value: string) {
   return formatSlovenianDateTime(new Date(value));
 }
 
-export function LegalizirajmoSiNewsletterManagement({
+export function NewsletterSubscriptionsManagement({
   canDelete,
   rows,
 }: {
   canDelete: boolean;
-  rows: LegalizirajmoSiNewsletterListRow[];
+  rows: NewsletterSubscriptionListRow[];
 }) {
-  const columns: ColumnDef<LegalizirajmoSiNewsletterListRow>[] = [
+  const columns: ColumnDef<NewsletterSubscriptionListRow>[] = [
     {
       accessorKey: "email",
       header: "Email",
@@ -74,7 +74,7 @@ export function LegalizirajmoSiNewsletterManagement({
                 <DeleteNewsletterSubscriptionDialog row={row.original} />
               </div>
             ),
-          } satisfies ColumnDef<LegalizirajmoSiNewsletterListRow>,
+          } satisfies ColumnDef<NewsletterSubscriptionListRow>,
         ]
       : []),
   ];

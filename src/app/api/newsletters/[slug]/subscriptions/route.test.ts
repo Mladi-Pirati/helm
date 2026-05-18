@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+mock.restore();
+
 type RateLimitResult = {
   rateLimited: boolean;
   retryAfterSeconds: number | null;
@@ -22,6 +24,13 @@ type TurnstileResult =
       status?: number | null;
     };
 
+type MockNewsletter = {
+  id: string;
+  name: string;
+  slug: string;
+  archivedAt: Date | null;
+};
+
 let rateLimitResult: RateLimitResult = {
   rateLimited: false,
   retryAfterSeconds: null,
@@ -35,8 +44,10 @@ let fetchCalls: Array<{
   init: Parameters<typeof fetch>[1];
 }> = [];
 let fetchResponse: Response | Error = new Response(null, { status: 204 });
+let mockNewsletters = new Map<string, MockNewsletter>();
 
-const newsletterTable = Symbol("legalizirajmoSiNewsletterSubscriptions");
+const newslettersTable = Symbol("newsletters");
+const newsletterSubscriptionsTable = Symbol("newsletterSubscriptions");
 const originalConsoleInfo = console.info;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
@@ -61,8 +72,15 @@ async function verifyTurnstileToken(
 }
 
 const db = {
+  query: {
+    newsletters: {
+      async findFirst() {
+        return mockNewsletters.get(currentSlug) ?? null;
+      },
+    },
+  },
   insert(table: unknown) {
-    expect(table).toBe(newsletterTable);
+    expect(table).toBe(newsletterSubscriptionsTable);
 
     return {
       async values(values: Record<string, unknown>) {
@@ -76,9 +94,12 @@ const db = {
   },
 };
 
+let currentSlug = "legalizirajmo-si";
+
 mock.module("@/db", () => ({ db }));
 mock.module("@/db/schema", () => ({
-  legalizirajmoSiNewsletterSubscriptions: newsletterTable,
+  newsletters: newslettersTable,
+  newsletterSubscriptions: newsletterSubscriptionsTable,
 }));
 mock.module("@/lib/api/rate-limit", () => ({ checkRateLimit }));
 mock.module("@/lib/api/turnstile", () => ({ verifyTurnstileToken }));
@@ -86,14 +107,25 @@ mock.module("@/lib/api/turnstile", () => ({ verifyTurnstileToken }));
 const routeModulePromise = import("./route");
 
 function createRequest(body: unknown, headers: HeadersInit = {}) {
-  return new Request("https://example.com/api/legalizirajmo-si-newsletter", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
+  return new Request(
+    `https://example.com/api/newsletters/${currentSlug}/subscriptions`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
+}
+
+function getContext(slug = currentSlug) {
+  currentSlug = slug;
+
+  return {
+    params: Promise.resolve({ slug }),
+  };
 }
 
 function getDiscordPayload() {
@@ -118,6 +150,27 @@ function getDiscordPayload() {
 }
 
 beforeEach(() => {
+  currentSlug = "legalizirajmo-si";
+  mockNewsletters = new Map([
+    [
+      "legalizirajmo-si",
+      {
+        id: "newsletter-1",
+        name: "legalizirajmo.si",
+        slug: "legalizirajmo-si",
+        archivedAt: null,
+      },
+    ],
+    [
+      "other",
+      {
+        id: "newsletter-2",
+        name: "Other Newsletter",
+        slug: "other",
+        archivedAt: null,
+      },
+    ],
+  ]);
   rateLimitResult = {
     rateLimited: false,
     retryAfterSeconds: null,
@@ -166,17 +219,19 @@ afterEach(() => {
   console.error = originalConsoleError;
 });
 
-describe("POST /api/legalizirajmo-si-newsletter", () => {
+describe("POST /api/newsletters/[slug]/subscriptions", () => {
   test("returns 204 for a normal valid signup without captcha", async () => {
     const { POST } = await routeModulePromise;
     const response = await POST(
       createRequest({ email: "newsletter@example.com" }),
+      getContext(),
     );
 
     expect(response.status).toBe(204);
     expect(await response.text()).toBe("");
     expect(insertedValues).toEqual([
       {
+        newsletterId: "newsletter-1",
         email: "newsletter@example.com",
         rawPayload: {
           email: "newsletter@example.com",
@@ -192,9 +247,14 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
     expect(discordPayload.embeds[0]).toMatchObject({
       title: "New Newsletter Signup",
       description: "A new legalizirajmo.si newsletter signup was received.",
-      url: "https://admin.test/admin/legalizirajmo-si-newsletter",
+      url: "https://admin.test/admin/newsletters/legalizirajmo-si",
       color: 0xf59e0b,
       fields: [
+        {
+          name: "Newsletter",
+          value: "legalizirajmo.si",
+          inline: true,
+        },
         {
           name: "Email",
           value: "newsletter@<redacted>",
@@ -209,6 +269,75 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
     expect(JSON.stringify(discordPayload)).not.toContain("example.com");
   });
 
+  test("returns 404 for an unknown newsletter slug", async () => {
+    const { POST } = await routeModulePromise;
+    const response = await POST(
+      createRequest({ email: "newsletter@example.com" }),
+      getContext("missing"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: "Newsletter not found.",
+    });
+    expect(insertedValues).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  test("returns 410 for an archived newsletter slug", async () => {
+    const { POST } = await routeModulePromise;
+    mockNewsletters.set("legalizirajmo-si", {
+      id: "newsletter-1",
+      name: "legalizirajmo.si",
+      slug: "legalizirajmo-si",
+      archivedAt: new Date("2026-05-18T00:00:00.000Z"),
+    });
+
+    const response = await POST(
+      createRequest({ email: "newsletter@example.com" }),
+      getContext(),
+    );
+
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: "This newsletter is archived and no longer accepts submissions.",
+    });
+    expect(insertedValues).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  test("allows the same email to be inserted for different newsletters", async () => {
+    const { POST } = await routeModulePromise;
+
+    const firstResponse = await POST(
+      createRequest({ email: "newsletter@example.com" }),
+      getContext("legalizirajmo-si"),
+    );
+    const secondResponse = await POST(
+      createRequest({ email: "newsletter@example.com" }),
+      getContext("other"),
+    );
+
+    expect(firstResponse.status).toBe(204);
+    expect(secondResponse.status).toBe(204);
+    expect(insertedValues).toEqual([
+      {
+        newsletterId: "newsletter-1",
+        email: "newsletter@example.com",
+        rawPayload: {
+          email: "newsletter@example.com",
+        },
+      },
+      {
+        newsletterId: "newsletter-2",
+        email: "newsletter@example.com",
+        rawPayload: {
+          email: "newsletter@example.com",
+        },
+      },
+    ]);
+  });
+
   test("returns 429 captcha_required when the normal rate limit is exceeded", async () => {
     const { POST } = await routeModulePromise;
 
@@ -219,6 +348,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
     const response = await POST(
       createRequest({ email: "newsletter@example.com" }),
+      getContext(),
     );
 
     expect(response.status).toBe(429);
@@ -253,6 +383,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
           "x-forwarded-for": "203.0.113.10, 70.41.3.18",
         },
       ),
+      getContext(),
     );
 
     expect(response.status).toBe(204);
@@ -264,6 +395,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
     ]);
     expect(insertedValues).toEqual([
       {
+        newsletterId: "newsletter-1",
         email: "newsletter@example.com",
         rawPayload: {
           email: "newsletter@example.com",
@@ -290,6 +422,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
         email: "newsletter@example.com",
         captchaToken: "expired-token",
       }),
+      getContext(),
     );
 
     expect(response.status).toBe(400);
@@ -318,6 +451,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
         email: "newsletter@example.com",
         captchaToken: "   ",
       }),
+      getContext(),
     );
 
     expect(response.status).toBe(400);
@@ -351,6 +485,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
         email: "newsletter@example.com",
         captchaToken: "token-from-turnstile",
       }),
+      getContext(),
     );
 
     expect(response.status).toBe(500);
@@ -370,6 +505,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
     const response = await POST(
       createRequest({ email: "newsletter@example.com" }),
+      getContext(),
     );
 
     expect(response.status).toBe(409);
@@ -384,7 +520,10 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
   test("preserves the existing invalid-email validation response", async () => {
     const { POST } = await routeModulePromise;
-    const response = await POST(createRequest({ email: "not-an-email" }));
+    const response = await POST(
+      createRequest({ email: "not-an-email" }),
+      getContext(),
+    );
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
@@ -405,6 +544,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
     const response = await POST(
       createRequest({ email: "newsletter@example.com" }),
+      getContext(),
     );
 
     expect(response.status).toBe(204);
@@ -419,6 +559,7 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
 
     const response = await POST(
       createRequest({ email: "newsletter@example.com" }),
+      getContext(),
     );
 
     expect(response.status).toBe(204);
@@ -428,10 +569,33 @@ describe("POST /api/legalizirajmo-si-newsletter", () => {
     expect(discordPayload.embeds[0].url).toBeUndefined();
     expect(discordPayload.embeds[0].fields).toEqual([
       {
+        name: "Newsletter",
+        value: "legalizirajmo.si",
+        inline: true,
+      },
+      {
         name: "Email",
         value: "newsletter@<redacted>",
         inline: true,
       },
     ]);
+  });
+
+  test("responds to CORS preflight", async () => {
+    const { OPTIONS } = await routeModulePromise;
+    const response = OPTIONS(
+      new Request("https://example.com/api/newsletters/other/subscriptions", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://legalizirajmo.si",
+          "Access-Control-Request-Method": "POST",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Access-Control-Allow-Methods")).toContain(
+      "POST",
+    );
   });
 });

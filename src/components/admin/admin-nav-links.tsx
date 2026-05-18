@@ -42,10 +42,10 @@ export function AdminNavLinks({
           active: pathname.startsWith("/admin/membership-applications"),
         },
         {
-          href: "/admin/legalizirajmo-si-newsletter",
-          label: "Legalizirajmo.si Newsletter",
+          href: "/admin/newsletters",
+          label: "Newsletters",
           icon: MailIcon,
-          active: pathname.startsWith("/admin/legalizirajmo-si-newsletter"),
+          active: pathname.startsWith("/admin/newsletters"),
         },
         ...(isAdmin
           ? [
