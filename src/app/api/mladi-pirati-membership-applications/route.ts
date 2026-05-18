@@ -345,7 +345,7 @@ export async function POST(request: Request) {
         motivation: motivation ?? null,
         consentsToDataProcessing,
         acceptsStatuteAndProgram,
-        status: "new",
+        status: "pending",
         rawPayload: getRawPayload(body),
       })
       .returning({

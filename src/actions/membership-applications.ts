@@ -10,7 +10,11 @@ import {
   mladiPiratiMembershipApplications,
 } from "@/db/schema";
 import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
-import { membershipApplicationStatuses } from "@/lib/membership-applications";
+import {
+  hasValidRejectionReason,
+  reviewMembershipApplicationStatuses,
+  type ReviewMembershipApplicationStatus,
+} from "@/lib/membership-applications";
 
 type MembershipApplicationActionFailure = {
   ok: false;
@@ -21,6 +25,7 @@ type UpdateMembershipApplicationStatusActionResult =
   | {
       ok: true;
       status: MembershipApplicationStatus;
+      rejectionReason: string | null;
       updatedAt: string;
     }
   | MembershipApplicationActionFailure;
@@ -34,7 +39,19 @@ type DeleteMembershipApplicationActionResult =
 
 const updateMembershipApplicationStatusSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
-  status: z.enum(membershipApplicationStatuses),
+  status: z.enum(reviewMembershipApplicationStatuses),
+  rejectionReason: z.string().optional(),
+}).superRefine((values, context) => {
+  if (
+    values.status === "rejected" &&
+    !hasValidRejectionReason(values.rejectionReason ?? "")
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Please enter a rejection reason with at least 4 words.",
+      path: ["rejectionReason"],
+    });
+  }
 });
 
 const deleteMembershipApplicationSchema = z.object({
@@ -73,7 +90,10 @@ async function requireMembershipApplicationsAdmin() {
 
 export async function updateMembershipApplicationStatusAction(
   applicationId: string,
-  status: MembershipApplicationStatus,
+  values: {
+    status: ReviewMembershipApplicationStatus;
+    rejectionReason?: string;
+  },
 ): Promise<UpdateMembershipApplicationStatusActionResult> {
   const access = await requireMembershipApplicationsAdmin();
 
@@ -86,19 +106,27 @@ export async function updateMembershipApplicationStatusAction(
 
   const parsedValues = updateMembershipApplicationStatusSchema.safeParse({
     applicationId,
-    status,
+    ...values,
   });
 
   if (!parsedValues.success) {
     return {
       ok: false,
-      message: "Please choose a valid application status.",
+      message:
+        parsedValues.error.issues[0]?.message ??
+        "Please choose a valid application status.",
     };
   }
+
+  const rejectionReason =
+    parsedValues.data.status === "rejected"
+      ? (parsedValues.data.rejectionReason?.trim() ?? null)
+      : null;
 
   let updatedApplication:
     | {
         status: MembershipApplicationStatus;
+        rejectionReason: string | null;
         updatedAt: Date;
       }
     | undefined;
@@ -108,6 +136,7 @@ export async function updateMembershipApplicationStatusAction(
       .update(mladiPiratiMembershipApplications)
       .set({
         status: parsedValues.data.status,
+        rejectionReason,
         updatedAt: new Date(),
       })
       .where(
@@ -118,6 +147,7 @@ export async function updateMembershipApplicationStatusAction(
       )
       .returning({
         status: mladiPiratiMembershipApplications.status,
+        rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
         updatedAt: mladiPiratiMembershipApplications.updatedAt,
       });
   } catch {
@@ -142,6 +172,7 @@ export async function updateMembershipApplicationStatusAction(
   return {
     ok: true,
     status: updatedApplication.status,
+    rejectionReason: updatedApplication.rejectionReason,
     updatedAt: updatedApplication.updatedAt.toISOString(),
   };
 }

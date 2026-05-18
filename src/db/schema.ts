@@ -82,7 +82,10 @@ export const mladiPiratiMembershipApplications = pgTable(
       .notNull(),
     acceptsStatuteAndProgram: boolean("accepts_statute_and_program")
       .notNull(),
-    status: membershipApplicationStatusEnum("status").notNull().default("new"),
+    status: membershipApplicationStatusEnum("status")
+      .notNull()
+      .default("pending"),
+    rejectionReason: text("rejection_reason"),
     rawPayload: jsonb("raw_payload")
       .$type<Record<string, unknown>>()
       .notNull()

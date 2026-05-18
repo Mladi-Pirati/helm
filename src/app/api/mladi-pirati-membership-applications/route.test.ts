@@ -45,7 +45,7 @@ let fetchCalls: Array<{
 let fetchResponse: Response | Error = new Response(null, { status: 204 });
 let createdApplication = {
   id: "application-123",
-  status: "new",
+  status: "pending",
 };
 
 const membershipApplicationsTable = {
@@ -197,7 +197,7 @@ beforeEach(() => {
   fetchResponse = new Response(null, { status: 204 });
   createdApplication = {
     id: "application-123",
-    status: "new",
+    status: "pending",
   };
   process.env.DISCORD_WEBHOOK = "https://discord.test/webhook";
   process.env.ADMIN_HOST = "https://admin.test/";
@@ -251,7 +251,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(insertedValues).toEqual([
       {
@@ -259,7 +259,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
         phone: null,
         discordUsername: null,
         motivation: null,
-        status: "new",
+        status: "pending",
         rawPayload: validMembershipApplicationPayload,
       },
     ]);
@@ -355,7 +355,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(turnstileCalls).toEqual([
       {
@@ -369,7 +369,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
         phone: null,
         discordUsername: null,
         motivation: null,
-        status: "new",
+        status: "pending",
         rawPayload: validMembershipApplicationPayload,
       },
     ]);
@@ -513,7 +513,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(fetchCalls).toHaveLength(1);
   });
@@ -530,7 +530,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
 
     const discordPayload = getDiscordPayload();

@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
       acceptsStatuteAndProgram:
         mladiPiratiMembershipApplications.acceptsStatuteAndProgram,
       status: mladiPiratiMembershipApplications.status,
+      rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
       createdAt: mladiPiratiMembershipApplications.createdAt,
       updatedAt: mladiPiratiMembershipApplications.updatedAt,
     })

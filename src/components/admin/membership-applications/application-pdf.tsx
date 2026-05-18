@@ -54,13 +54,13 @@ export type MembershipApplicationPdfRow = {
   consentsToDataProcessing: boolean;
   acceptsStatuteAndProgram: boolean;
   status: MembershipApplicationStatus;
+  rejectionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 const pdfStatusLabels: Record<MembershipApplicationStatus, string> = {
-  new: "Nova",
-  in_review: "V obravnavi",
+  pending: "V obravnavi",
   approved: "Odobrena",
   rejected: "Zavrnjena",
 };
@@ -298,6 +298,11 @@ export function MembershipApplicationPdfDocument({
           <View style={[styles.grid, { marginTop: 8 }]}>
             <Field label="ID vloge" value={row.id} />
             <Field label="Zadnja posodobitev" value={updatedAt} />
+            <Field
+              label="Razlog zavrnitve"
+              value={row.rejectionReason}
+              full
+            />
           </View>
         </View>
 

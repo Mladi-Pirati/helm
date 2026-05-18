@@ -29,8 +29,7 @@ export const participationModeLabels: Record<ParticipationMode, string> = {
 };
 
 export const membershipApplicationStatuses = [
-  "new",
-  "in_review",
+  "pending",
   "approved",
   "rejected",
 ] as const;
@@ -42,11 +41,18 @@ export const membershipApplicationStatusLabels: Record<
   MembershipApplicationStatus,
   string
 > = {
-  new: "New",
-  in_review: "In review",
+  pending: "Pending",
   approved: "Approved",
   rejected: "Rejected",
 };
+
+export const reviewMembershipApplicationStatuses = [
+  "approved",
+  "rejected",
+] as const;
+
+export type ReviewMembershipApplicationStatus =
+  (typeof reviewMembershipApplicationStatuses)[number];
 
 export type MembershipApplicationsSearchParams = {
   q?: string | string[] | undefined;
@@ -129,13 +135,23 @@ export function buildMembershipApplicationDetailsHref(
     : `/admin/membership-applications/${applicationId}`;
 }
 
+export function getRejectionReasonWordCount(value: string) {
+  const words = value.trim().match(/\S+/g);
+
+  return words?.length ?? 0;
+}
+
+export function hasValidRejectionReason(value: string) {
+  return getRejectionReasonWordCount(value) >= 4;
+}
+
 export function getMembershipApplicationStatusVariant(
   status: MembershipApplicationStatus,
 ) {
   switch (status) {
     case "approved":
       return "default";
-    case "in_review":
+    case "pending":
       return "secondary";
     case "rejected":
       return "destructive";
