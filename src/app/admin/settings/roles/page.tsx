@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/tabs";
 import { db } from "@/db";
 import { modules, permissions, rolePermissions, roles } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export default async function AdminRolesPage() {
-  await requireAdmin();
+  await requirePermission("access-control.manage_roles");
 
   const modulesRows = await db
     .select({

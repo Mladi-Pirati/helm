@@ -5,7 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import { permissions, rolePermissions, roles } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   createRoleSchema,
   type CreateRoleInput,
@@ -32,21 +32,21 @@ function isUniqueViolation(error: unknown) {
   return false;
 }
 
-async function requireAdmin() {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "admin") {
+async function requireAccessControlPermission() {
+  const allowed = await hasPermission("access-control.manage_roles");
+  if (!allowed) {
     return {
       ok: false as const,
       message: "You are not allowed to manage access control.",
     };
   }
-  return { ok: true as const, user };
+  return { ok: true as const };
 }
 
 export async function createRoleAction(
   values: CreateRoleInput,
 ): Promise<RoleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const parsed = createRoleSchema.safeParse(values);
@@ -89,7 +89,7 @@ export async function updateRoleAction(
   roleId: string,
   values: UpdateRoleInput,
 ): Promise<RoleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const roleRow = await db.query.roles.findFirst({
@@ -133,7 +133,7 @@ export async function updateRoleAction(
 export async function deleteRoleAction(
   roleId: string,
 ): Promise<RoleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const roleRow = await db.query.roles.findFirst({
@@ -155,7 +155,7 @@ export async function updateRolePermissionsAction(
   roleId: string,
   permissionIds: string[],
 ): Promise<RoleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const roleRow = await db.query.roles.findFirst({

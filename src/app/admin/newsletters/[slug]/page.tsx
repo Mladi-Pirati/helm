@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { db } from "@/db";
 import { newsletters, newsletterSubscriptions } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 import {
   buildNewsletterSubscriptionListHref,
   buildNewsletterSubscriptionQueryString,
@@ -27,7 +27,7 @@ export default async function AdminNewsletterPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<NewsletterSearchParams>;
 }) {
-  const currentUser = await getCurrentUser();
+  const { permissions } = await getCurrentUserPermissions();
   const { slug } = await params;
   const newsletter = await db.query.newsletters.findFirst({
     where: sql`lower(${newsletters.slug}) = ${slug.toLowerCase()}`,
@@ -46,7 +46,7 @@ export default async function AdminNewsletterPage({
 
   const filters = parseNewsletterSubscriptionFilters(await searchParams);
   const queryString = buildNewsletterSubscriptionQueryString(filters);
-  const canManage = currentUser?.role === "admin";
+  const canManage = permissions.includes("newsletters.update");
   const canDelete = canManage && !newsletter.archivedAt;
 
   const exportCsvHref = queryString

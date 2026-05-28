@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { newsletters, newsletterSubscriptions } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   createNewsletterSchema,
   type CreateNewsletterInput,
@@ -52,27 +52,15 @@ function isUniqueViolation(error: unknown) {
   return false;
 }
 
-async function requireNewsletterAdmin() {
-  const user = await getCurrentUser();
-
-  if (!user) {
+async function requireNewsletterManagePermission() {
+  const allowed = await hasPermission("newsletters.update");
+  if (!allowed) {
     return {
       ok: false as const,
       message: "You are not allowed to manage newsletters.",
     };
   }
-
-  if (user.role !== "admin") {
-    return {
-      ok: false as const,
-      message: "You are not allowed to manage newsletters.",
-    };
-  }
-
-  return {
-    ok: true as const,
-    user,
-  };
+  return { ok: true as const };
 }
 
 async function getNewsletterBySlug(slug: string) {
@@ -89,7 +77,7 @@ async function getNewsletterBySlug(slug: string) {
 export async function createNewsletterAction(
   values: CreateNewsletterInput,
 ): Promise<CreateNewsletterActionResult> {
-  const access = await requireNewsletterAdmin();
+  const access = await requireNewsletterManagePermission();
 
   if (!access.ok) {
     return {
@@ -154,7 +142,7 @@ export async function updateNewsletterAction(
   newsletterSlug: string,
   values: UpdateNewsletterInput,
 ): Promise<UpdateNewsletterActionResult> {
-  const access = await requireNewsletterAdmin();
+  const access = await requireNewsletterManagePermission();
 
   if (!access.ok) {
     return {
@@ -204,7 +192,7 @@ export async function updateNewsletterAction(
 export async function archiveNewsletterAction(
   newsletterSlug: string,
 ): Promise<NewsletterMutationActionResult> {
-  const access = await requireNewsletterAdmin();
+  const access = await requireNewsletterManagePermission();
 
   if (!access.ok) {
     return {
@@ -246,7 +234,7 @@ export async function archiveNewsletterAction(
 export async function unarchiveNewsletterAction(
   newsletterSlug: string,
 ): Promise<NewsletterMutationActionResult> {
-  const access = await requireNewsletterAdmin();
+  const access = await requireNewsletterManagePermission();
 
   if (!access.ok) {
     return {
@@ -288,7 +276,7 @@ export async function unarchiveNewsletterAction(
 export async function deleteNewsletterSubscriptionAction(
   subscriptionId: string,
 ): Promise<NewsletterMutationActionResult> {
-  const access = await requireNewsletterAdmin();
+  const access = await requireNewsletterManagePermission();
 
   if (!access.ok) {
     return {

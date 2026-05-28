@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 type AdminNavLinksProps = {
-  isAdmin: boolean;
+  permissions: string[];
   onNavigate?: () => void;
 };
 
@@ -20,7 +20,7 @@ const baseLinkClassName =
   "flex items-center gap-2 rounded-none border px-3 py-2 text-xs font-medium transition-colors";
 
 export function AdminNavLinks({
-  isAdmin,
+  permissions,
   onNavigate,
 }: AdminNavLinksProps) {
   const pathname = usePathname();
@@ -30,30 +30,34 @@ export function AdminNavLinks({
       label: "Dashboard",
       icon: HomeIcon,
       active: pathname === "/admin",
+      requiredPermission: null,
     },
     {
       href: "/admin/members",
       label: "Members",
       icon: UsersIcon,
       active: pathname.startsWith("/admin/members"),
+      requiredPermission: "members.read",
     },
     {
       href: "/admin/newsletters",
       label: "Newsletters",
       icon: MailIcon,
       active: pathname.startsWith("/admin/newsletters"),
+      requiredPermission: "newsletters.read",
     },
-    ...(isAdmin
-      ? [
-          {
-            href: "/admin/settings/roles",
-            label: "Access Control",
-            icon: ShieldIcon,
-            active: pathname.startsWith("/admin/settings/roles"),
-          },
-        ]
-      : []),
-  ];
+    {
+      href: "/admin/settings/roles",
+      label: "Access Control",
+      icon: ShieldIcon,
+      active: pathname.startsWith("/admin/settings/roles"),
+      requiredPermission: "access-control.manage_roles",
+    },
+  ].filter(
+    (item) =>
+      item.requiredPermission === null ||
+      permissions.includes(item.requiredPermission)
+  );
 
   return (
     <nav className="grid gap-2">

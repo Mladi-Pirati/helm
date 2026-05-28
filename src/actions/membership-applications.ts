@@ -9,7 +9,7 @@ import {
   type MembershipApplicationStatus,
   mladiPiratiMembershipApplications,
 } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   hasValidRejectionReason,
   reviewMembershipApplicationStatuses,
@@ -58,27 +58,15 @@ const deleteMembershipApplicationSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
 });
 
-async function requireMembershipApplicationsAdmin() {
-  const user = await getCurrentUser();
-
-  if (!user) {
+async function requireMembershipApplicationsPermission() {
+  const allowed = await hasPermission("members.read");
+  if (!allowed) {
     return {
       ok: false as const,
       message: "You are not allowed to review membership applications.",
     };
   }
-
-  if (user.role !== "admin") {
-    return {
-      ok: false as const,
-      message: "You are not allowed to review membership applications.",
-    };
-  }
-
-  return {
-    ok: true as const,
-    user,
-  };
+  return { ok: true as const };
 }
 
 export async function updateMembershipApplicationStatusAction(
@@ -88,7 +76,7 @@ export async function updateMembershipApplicationStatusAction(
     rejectionReason?: string;
   },
 ): Promise<UpdateMembershipApplicationStatusActionResult> {
-  const access = await requireMembershipApplicationsAdmin();
+  const access = await requireMembershipApplicationsPermission();
 
   if (!access.ok) {
     return {
@@ -173,7 +161,7 @@ export async function updateMembershipApplicationStatusAction(
 export async function deleteMembershipApplicationAction(
   applicationId: string,
 ): Promise<DeleteMembershipApplicationActionResult> {
-  const access = await requireMembershipApplicationsAdmin();
+  const access = await requireMembershipApplicationsPermission();
 
   if (!access.ok) {
     return {

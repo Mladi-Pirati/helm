@@ -1,6 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export default async function MembersPage() {
+  await requirePermission("members.read");
+
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

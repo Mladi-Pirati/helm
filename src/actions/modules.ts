@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { modules } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   createModuleSchema,
   type CreateModuleInput,
@@ -32,21 +32,21 @@ function isUniqueViolation(error: unknown) {
   return false;
 }
 
-async function requireAdmin() {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "admin") {
+async function requireAccessControlPermission() {
+  const allowed = await hasPermission("access-control.manage_modules");
+  if (!allowed) {
     return {
       ok: false as const,
       message: "You are not allowed to manage access control.",
     };
   }
-  return { ok: true as const, user };
+  return { ok: true as const };
 }
 
 export async function createModuleAction(
   values: CreateModuleInput,
 ): Promise<ModuleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const parsed = createModuleSchema.safeParse(values);
@@ -84,7 +84,7 @@ export async function updateModuleAction(
   moduleId: string,
   values: UpdateModuleInput,
 ): Promise<ModuleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const moduleRow = await db.query.modules.findFirst({
@@ -115,7 +115,7 @@ export async function updateModuleAction(
 export async function deleteModuleAction(
   moduleId: string,
 ): Promise<ModuleMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const moduleRow = await db.query.modules.findFirst({

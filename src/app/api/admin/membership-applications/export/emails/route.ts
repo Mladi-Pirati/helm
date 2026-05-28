@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 import { parseMembershipApplicationsFilters } from "@/lib/membership-applications";
 import { buildMembershipApplicationsWhere } from "@/lib/membership-applications-query";
 
@@ -20,7 +20,7 @@ function escapeCsvField(value: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  await requireAdmin();
+  await requirePermission("members.read");
 
   const rawSearchParams = Object.fromEntries(
     request.nextUrl.searchParams.entries(),

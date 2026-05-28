@@ -4,7 +4,7 @@ import { eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { members, memberRoles, roles } from "@/db/schema";
 import {
   getKeycloakFullNameFromProfile,
   getKeycloakUsernameFromProfile,
@@ -18,26 +18,65 @@ const keycloakProfileSchema = z
   })
   .passthrough();
 
+function getNamePartsFromProfile(profile: unknown): {
+  firstName: string;
+  lastName: string;
+} {
+  const parsed = z
+    .object({
+      given_name: z.string().optional(),
+      family_name: z.string().optional(),
+      name: z.string().optional(),
+    })
+    .passthrough()
+    .safeParse(profile);
+
+  if (!parsed.success) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const givenName = parsed.data.given_name?.trim();
+  const familyName = parsed.data.family_name?.trim();
+
+  if (givenName && familyName) {
+    return { firstName: givenName, lastName: familyName };
+  }
+
+  const fullName = parsed.data.name?.trim();
+  if (fullName) {
+    const parts = fullName.split(/\s+/);
+    return {
+      firstName: givenName || parts[0] || "",
+      lastName: familyName || parts.slice(1).join(" ") || "",
+    };
+  }
+
+  return {
+    firstName: givenName || "",
+    lastName: familyName || "",
+  };
+}
+
 async function getSessionUserByKeycloakUserId(keycloakUserId: string) {
-  return db.query.users.findFirst({
-    where: eq(users.keycloakUserId, keycloakUserId),
+  return db.query.members.findFirst({
+    where: eq(members.keycloakId, keycloakUserId),
     columns: {
       id: true,
-      fullName: true,
-      keycloakUserId: true,
+      firstName: true,
+      lastName: true,
+      keycloakId: true,
       username: true,
-      role: true,
     },
   });
 }
 
-async function hasKeycloakManagedUsers() {
+async function hasKeycloakManagedMembers() {
   const rows = await db
     .select({
-      id: users.id,
+      id: members.id,
     })
-    .from(users)
-    .where(isNotNull(users.keycloakUserId))
+    .from(members)
+    .where(isNotNull(members.keycloakId))
     .limit(1);
 
   return rows.length > 0;
@@ -53,6 +92,22 @@ function hasClientRole(profile: unknown, accessToken: unknown) {
   );
 }
 
+async function assignSuperadminRole(memberId: string) {
+  const superadminRole = await db.query.roles.findFirst({
+    where: eq(roles.key, "superadmin"),
+  });
+
+  if (!superadminRole) {
+    return;
+  }
+
+  await db.insert(memberRoles).values({
+    memberId,
+    roleId: superadminRole.id,
+    grantedBy: null,
+  });
+}
+
 async function ensureLocalUserForSignIn(profile: unknown, accessToken: unknown) {
   const parsedProfile = keycloakProfileSchema.safeParse(profile);
 
@@ -60,51 +115,57 @@ async function ensureLocalUserForSignIn(profile: unknown, accessToken: unknown) 
     return false;
   }
 
-  const existingUser = await getSessionUserByKeycloakUserId(
+  const existingMember = await getSessionUserByKeycloakUserId(
     parsedProfile.data.sub,
   );
 
-  if (existingUser) {
+  if (existingMember) {
     return true;
   }
 
-  if (await hasKeycloakManagedUsers()) {
+  if (await hasKeycloakManagedMembers()) {
     return false;
   }
 
   const username =
     getKeycloakUsernameFromProfile(profile) ?? parsedProfile.data.sub;
-  const fullName = getKeycloakFullNameFromProfile(profile) ?? username;
-  const existingUsernameUser = await db.query.users.findFirst({
-    where: eq(users.username, username),
+  const { firstName, lastName } = getNamePartsFromProfile(profile);
+  const existingUsernameMember = await db.query.members.findFirst({
+    where: eq(members.username, username),
     columns: {
       id: true,
     },
   });
 
-  if (existingUsernameUser) {
+  if (existingUsernameMember) {
     await db
-      .update(users)
+      .update(members)
       .set({
-        forcePasswordChange: false,
-        fullName,
-        keycloakUserId: parsedProfile.data.sub,
-        passwordHash: "",
-        role: "admin",
+        firstName: firstName || username,
+        lastName: lastName || "",
+        keycloakId: parsedProfile.data.sub,
+        username,
       })
-      .where(eq(users.id, existingUsernameUser.id));
+      .where(eq(members.id, existingUsernameMember.id));
+
+    await assignSuperadminRole(existingUsernameMember.id);
 
     return true;
   }
 
-  await db.insert(users).values({
-    forcePasswordChange: false,
-    fullName,
-    keycloakUserId: parsedProfile.data.sub,
-    passwordHash: "",
-    role: "admin",
-    username,
-  });
+  const [newMember] = await db
+    .insert(members)
+    .values({
+      firstName: firstName || username,
+      lastName: lastName || "",
+      keycloakId: parsedProfile.data.sub,
+      username,
+    })
+    .returning({ id: members.id });
+
+  if (newMember) {
+    await assignSuperadminRole(newMember.id);
+  }
 
   return true;
 }
@@ -143,21 +204,20 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       }
 
       if (typeof token.keycloakUserId === "string") {
-        const currentUser = await getSessionUserByKeycloakUserId(
+        const currentMember = await getSessionUserByKeycloakUserId(
           token.keycloakUserId,
         );
 
-        if (!currentUser) {
+        if (!currentMember) {
           return null;
         }
 
-        token.sub = currentUser.id;
-        token.fullName = currentUser.fullName;
-        token.keycloakUserId = currentUser.keycloakUserId ?? undefined;
-        token.name = currentUser.fullName;
-        token.username = currentUser.username;
-        token.forcePasswordChange = false;
-        token.role = currentUser.role;
+        const fullName = `${currentMember.firstName} ${currentMember.lastName}`.trim();
+        token.sub = currentMember.id;
+        token.fullName = fullName;
+        token.keycloakUserId = currentMember.keycloakId;
+        token.name = fullName;
+        token.username = currentMember.username;
       }
 
       return token;
@@ -168,16 +228,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         typeof token.sub === "string" &&
         typeof token.fullName === "string" &&
         typeof token.keycloakUserId === "string" &&
-        typeof token.username === "string" &&
-        (token.role === "admin" || token.role === "viewer")
+        typeof token.username === "string"
       ) {
         session.user.id = token.sub;
         session.user.fullName = token.fullName;
         session.user.keycloakUserId = token.keycloakUserId;
         session.user.name = token.fullName;
         session.user.username = token.username;
-        session.user.forcePasswordChange = false;
-        session.user.role = token.role;
       }
 
       return session;

@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { modules, permissions } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
 import {
   createPermissionSchema,
   type CreatePermissionInput,
@@ -32,21 +32,21 @@ function isUniqueViolation(error: unknown) {
   return false;
 }
 
-async function requireAdmin() {
-  const user = await getCurrentUser();
-  if (!user || user.role !== "admin") {
+async function requireAccessControlPermission() {
+  const allowed = await hasPermission("access-control.manage_permissions");
+  if (!allowed) {
     return {
       ok: false as const,
       message: "You are not allowed to manage access control.",
     };
   }
-  return { ok: true as const, user };
+  return { ok: true as const };
 }
 
 export async function createPermissionAction(
   values: CreatePermissionInput,
 ): Promise<PermissionMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const parsed = createPermissionSchema.safeParse(values);
@@ -100,7 +100,7 @@ export async function updatePermissionAction(
   permissionId: string,
   values: UpdatePermissionInput,
 ): Promise<PermissionMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const permissionRow = await db.query.permissions.findFirst({
@@ -131,7 +131,7 @@ export async function updatePermissionAction(
 export async function deletePermissionAction(
   permissionId: string,
 ): Promise<PermissionMutationActionResult> {
-  const access = await requireAdmin();
+  const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
 
   const permissionRow = await db.query.permissions.findFirst({

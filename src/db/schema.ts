@@ -16,14 +16,10 @@ import {
 
 import { membershipApplicationStatuses } from "@/lib/membership-applications";
 
-export const USER_ROLES = ["admin", "viewer"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
-
 export type { MembershipApplicationStatus } from "@/lib/membership-applications";
 
 export const MEMBERSHIP_APPLICATION_STATUSES = membershipApplicationStatuses;
 
-export const userRoleEnum = pgEnum("user_role", USER_ROLES);
 export const membershipApplicationStatusEnum = pgEnum(
   "membership_application_status",
   MEMBERSHIP_APPLICATION_STATUSES,
@@ -43,6 +39,9 @@ export const CONTACT_TYPES = [
 ] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
+export const ROLE_KEYS = ["superadmin"] as const;
+export type RoleKey = (typeof ROLE_KEYS)[number];
+
 export const addressLabelEnum = pgEnum("address_label", ADDRESS_LABELS);
 export const contactTypeEnum = pgEnum("contact_type", CONTACT_TYPES);
 
@@ -55,28 +54,6 @@ const timestamps = {
     .notNull()
     .$onUpdate(() => new Date()),
 };
-
-export const users = pgTable(
-  "users",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    keycloakUserId: text("keycloak_user_id"),
-    fullName: text("full_name").notNull(),
-    username: text("username").notNull(),
-    passwordHash: text("password_hash").notNull(),
-    forcePasswordChange: boolean("force_password_change")
-      .notNull()
-      .default(true),
-    role: userRoleEnum("role").notNull().default("viewer"),
-    ...timestamps,
-  },
-  (table) => [
-    uniqueIndex("users_username_unique").on(table.username),
-    uniqueIndex("users_keycloak_user_id_unique").on(table.keycloakUserId),
-  ],
-);
 
 export const mladiPiratiMembershipApplications = pgTable(
   "mladi_pirati_membership_applications",
@@ -119,6 +96,7 @@ export const members = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
+    username: text("username").notNull(),
     keycloakId: text("keycloak_id").notNull(),
     notes: text("notes"),
     disabledAt: timestamp("disabled_at", { withTimezone: true, mode: "date" }),
@@ -389,8 +367,6 @@ export const apiRateLimitWindows = pgTable(
   ],
 );
 
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 export type MembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferSelect;
 export type NewMembershipApplication =

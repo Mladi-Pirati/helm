@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   formatSlovenianDate,
   formatSlovenianDateTime,
@@ -64,7 +64,7 @@ export default async function AdminMembershipApplicationPage({
   params: Promise<{ applicationId: string }>;
   searchParams: Promise<MembershipApplicationsSearchParams>;
 }) {
-  await requireAdmin();
+  await requirePermission("members.read");
   const { applicationId } = await params;
   const filters = parseMembershipApplicationsFilters(await searchParams);
   const backHref = buildMembershipApplicationsListHref(

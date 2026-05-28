@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { eq, and, isNull, gte, sql } from "drizzle-orm";
+import { eq, and, isNull, gte, or } from "drizzle-orm";
 import { forbidden } from "next/navigation";
 
 import { db } from "@/db";
@@ -24,7 +24,7 @@ async function getMemberPermissionKeys(memberId: string): Promise<Set<string>> {
       and(
         eq(memberRoles.memberId, memberId),
         // Not expired: expires_at IS NULL OR expires_at >= now
-        sql`${memberRoles.expiresAt} IS NULL OR ${memberRoles.expiresAt} >= ${now}`,
+        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
       ),
     );
 
@@ -34,20 +34,12 @@ async function getMemberPermissionKeys(memberId: string): Promise<Set<string>> {
 /**
  * Check if the current user has a specific permission.
  * Returns false if not authenticated or no permission.
- *
- * Legacy fallback: users with role === "admin" in the users table
- * are treated as superusers (all permissions).
  */
 export async function hasPermission(permissionKey: string): Promise<boolean> {
   const user = await getCurrentUser();
 
   if (!user) {
     return false;
-  }
-
-  // Legacy superuser fallback
-  if (user.role === "admin") {
-    return true;
   }
 
   // Find member by keycloak_id
@@ -57,7 +49,6 @@ export async function hasPermission(permissionKey: string): Promise<boolean> {
   });
 
   if (!member) {
-    // No member record yet — legacy viewer has no permissions
     return false;
   }
 
@@ -73,9 +64,6 @@ export async function hasAllPermissions(...permissionKeys: string[]): Promise<bo
 
   const user = await getCurrentUser();
   if (!user) return false;
-
-  // Legacy superuser fallback
-  if (user.role === "admin") return true;
 
   const member = await db.query.members.findFirst({
     where: eq(members.keycloakId, user.keycloakUserId),
@@ -96,9 +84,6 @@ export async function hasAnyPermission(...permissionKeys: string[]): Promise<boo
 
   const user = await getCurrentUser();
   if (!user) return false;
-
-  // Legacy superuser fallback
-  if (user.role === "admin") return true;
 
   const member = await db.query.members.findFirst({
     where: eq(members.keycloakId, user.keycloakUserId),
@@ -159,15 +144,6 @@ export async function getCurrentUserPermissions(): Promise<{
     return { permissions: [], roles: [] };
   }
 
-  // Legacy superuser
-  if (user.role === "admin") {
-    const allPerms = await db.select({ key: permissions.key }).from(permissions);
-    return {
-      permissions: allPerms.map((p) => p.key),
-      roles: [{ id: "legacy", key: "admin", name: "Administrator (Legacy)" }],
-    };
-  }
-
   const member = await db.query.members.findFirst({
     where: eq(members.keycloakId, user.keycloakUserId),
     columns: { id: true },
@@ -188,7 +164,7 @@ export async function getCurrentUserPermissions(): Promise<{
       .where(
         and(
           eq(memberRoles.memberId, member.id),
-          sql`${memberRoles.expiresAt} IS NULL OR ${memberRoles.expiresAt} >= ${now}`,
+          or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
         ),
       ),
     db
@@ -202,7 +178,7 @@ export async function getCurrentUserPermissions(): Promise<{
       .where(
         and(
           eq(memberRoles.memberId, member.id),
-          sql`${memberRoles.expiresAt} IS NULL OR ${memberRoles.expiresAt} >= ${now}`,
+          or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
         ),
       ),
   ]);

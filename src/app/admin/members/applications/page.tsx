@@ -6,7 +6,7 @@ import { MembershipApplicationsManagement } from "@/components/admin/membership-
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 import {
   buildMembershipApplicationsListHref,
   buildMembershipApplicationsQueryString,
@@ -46,11 +46,11 @@ export default async function AdminMembershipApplicationsPage({
 }: {
   searchParams: Promise<MembershipApplicationsSearchParams>;
 }) {
-  const currentUser = await getCurrentUser();
+  const { permissions } = await getCurrentUserPermissions();
   const filters = parseMembershipApplicationsFilters(await searchParams);
   const queryString = buildMembershipApplicationsQueryString(filters);
   const whereClause = buildMembershipApplicationsWhere(filters);
-  const canDelete = currentUser?.role === "admin";
+  const canDelete = permissions.includes("members.delete");
 
   const exportCsvHref = queryString
     ? `/api/admin/membership-applications/export/csv?${queryString}`

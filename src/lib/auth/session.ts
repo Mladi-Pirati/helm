@@ -6,11 +6,9 @@ import { auth } from "@/auth";
 
 const appSessionUserSchema = z
   .object({
-    forcePasswordChange: z.boolean(),
     fullName: z.string().min(1),
     id: z.string().min(1),
     keycloakUserId: z.string().min(1),
-    role: z.enum(["admin", "viewer"]),
     username: z.string().min(1),
   })
   .passthrough();
@@ -42,14 +40,4 @@ export const requireUser = cache(async () => {
 
 export const requireReadyUser = cache(async () => {
   return requireUser();
-});
-
-export const requireAdmin = cache(async () => {
-  const user = await requireReadyUser();
-
-  if (user.role !== "admin") {
-    forbidden();
-  }
-
-  return user;
 });

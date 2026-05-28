@@ -29,9 +29,7 @@ export default async function AdminSettingsPage() {
             <p className="text-sm font-medium">{user.fullName}</p>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>@{user.username}</span>
-              <Badge variant={user.role === "admin" ? "default" : "outline"}>
-                {user.role}
-              </Badge>
+              <Badge variant="outline">{user.id.slice(0, 8)}</Badge>
             </div>
           </div>
         </CardContent>
