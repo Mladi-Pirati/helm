@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   HomeIcon,
   MailIcon,
-  Users2Icon,
+  ShieldIcon,
   UsersIcon,
 } from "lucide-react";
 
@@ -46,10 +46,10 @@ export function AdminNavLinks({
     ...(isAdmin
       ? [
           {
-            href: "/admin/users",
-            label: "Users",
-            icon: Users2Icon,
-            active: pathname.startsWith("/admin/users"),
+            href: "/admin/settings/roles",
+            label: "Access Control",
+            icon: ShieldIcon,
+            active: pathname.startsWith("/admin/settings/roles"),
           },
         ]
       : []),

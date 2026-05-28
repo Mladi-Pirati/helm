@@ -29,6 +29,23 @@ export const membershipApplicationStatusEnum = pgEnum(
   MEMBERSHIP_APPLICATION_STATUSES,
 );
 
+export const ADDRESS_LABELS = ["primary", "temporary", "work", "other"] as const;
+export type AddressLabel = (typeof ADDRESS_LABELS)[number];
+
+export const CONTACT_TYPES = [
+  "phone",
+  "email",
+  "instagram",
+  "tiktok",
+  "twitter",
+  "discord",
+  "website",
+] as const;
+export type ContactType = (typeof CONTACT_TYPES)[number];
+
+export const addressLabelEnum = pgEnum("address_label", ADDRESS_LABELS);
+export const contactTypeEnum = pgEnum("contact_type", CONTACT_TYPES);
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
     .defaultNow()
@@ -55,14 +72,10 @@ export const users = pgTable(
     role: userRoleEnum("role").notNull().default("viewer"),
     ...timestamps,
   },
-  (table) => ({
-    usernameUniqueIndex: uniqueIndex("users_username_unique").on(
-      table.username,
-    ),
-    keycloakUserIdUniqueIndex: uniqueIndex("users_keycloak_user_id_unique").on(
-      table.keycloakUserId,
-    ),
-  }),
+  (table) => [
+    uniqueIndex("users_username_unique").on(table.username),
+    uniqueIndex("users_keycloak_user_id_unique").on(table.keycloakUserId),
+  ],
 );
 
 export const mladiPiratiMembershipApplications = pgTable(
@@ -98,6 +111,215 @@ export const mladiPiratiMembershipApplications = pgTable(
   },
 );
 
+export const members = pgTable(
+  "members",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
+    keycloakId: text("keycloak_id").notNull(),
+    notes: text("notes"),
+    disabledAt: timestamp("disabled_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("members_keycloak_id_unique").on(table.keycloakId),
+  ],
+);
+
+export const addresses = pgTable(
+  "addresses",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text("member_id").notNull(),
+    label: addressLabelEnum("label").notNull(),
+    street: text("street").notNull(),
+    city: text("city").notNull(),
+    postalCode: text("postal_code").notNull(),
+    country: text("country").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.memberId],
+      foreignColumns: [members.id],
+      name: "addresses_member_id_members_id_fk",
+    }).onDelete("cascade"),
+    index("addresses_member_id_idx").on(table.memberId),
+  ],
+);
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text("member_id").notNull(),
+    type: contactTypeEnum("type").notNull(),
+    value: text("value").notNull(),
+    label: text("label"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.memberId],
+      foreignColumns: [members.id],
+      name: "contacts_member_id_members_id_fk",
+    }).onDelete("cascade"),
+    index("contacts_member_id_idx").on(table.memberId),
+    uniqueIndex("contacts_sort_order_unique").on(
+      table.memberId,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const memberships = pgTable(
+  "memberships",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    memberId: text("member_id").notNull(),
+    extendedAt: timestamp("extended_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.memberId],
+      foreignColumns: [members.id],
+      name: "memberships_member_id_members_id_fk",
+    }).onDelete("cascade"),
+    index("memberships_member_id_idx").on(table.memberId),
+  ],
+);
+
+export const modules = pgTable("modules", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
+});
+
+export const permissions = pgTable(
+  "permissions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    moduleId: text("module_id").notNull(),
+    action: text("action").notNull(),
+    key: text("key").notNull().unique(),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.moduleId],
+      foreignColumns: [modules.id],
+      name: "permissions_module_id_modules_id_fk",
+    }).onDelete("cascade"),
+    uniqueIndex("permissions_module_id_action_unique").on(
+      table.moduleId,
+      table.action,
+    ),
+  ],
+);
+
+export const roles = pgTable(
+  "roles",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    key: text("key").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    rank: integer("rank").notNull().unique(),
+    isSystem: boolean("is_system").notNull().default(false),
+    ...timestamps,
+  },
+);
+
+export const rolePermissions = pgTable(
+  "role_permissions",
+  {
+    roleId: text("role_id").notNull(),
+    permissionId: text("permission_id").notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.roleId, table.permissionId],
+      name: "role_permissions_pkey",
+    }),
+    foreignKey({
+      columns: [table.roleId],
+      foreignColumns: [roles.id],
+      name: "role_permissions_role_id_roles_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.permissionId],
+      foreignColumns: [permissions.id],
+      name: "role_permissions_permission_id_permissions_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const memberRoles = pgTable(
+  "member_roles",
+  {
+    memberId: text("member_id").notNull(),
+    roleId: text("role_id").notNull(),
+    grantedBy: text("granted_by"),
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.memberId, table.roleId],
+      name: "member_roles_pkey",
+    }),
+    foreignKey({
+      columns: [table.memberId],
+      foreignColumns: [members.id],
+      name: "member_roles_member_id_members_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.roleId],
+      foreignColumns: [roles.id],
+      name: "member_roles_role_id_roles_id_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.grantedBy],
+      foreignColumns: [members.id],
+      name: "member_roles_granted_by_members_id_fk",
+    }).onDelete("set null"),
+  ],
+);
+
 export const newsletters = pgTable(
   "newsletters",
   {
@@ -110,11 +332,9 @@ export const newsletters = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
   },
-  (table) => ({
-    slugUniqueIndex: uniqueIndex("newsletters_slug_unique").on(
-      sql`lower(${table.slug})`,
-    ),
-  }),
+  (table) => [
+    uniqueIndex("newsletters_slug_unique").on(sql`lower(${table.slug})`),
+  ],
 );
 
 export const newsletterSubscriptions = pgTable(
@@ -131,20 +351,18 @@ export const newsletterSubscriptions = pgTable(
       .default(sql`'{}'::jsonb`),
     ...timestamps,
   },
-  (table) => ({
-    newsletterReference: foreignKey({
+  (table) => [
+    foreignKey({
       columns: [table.newsletterId],
       foreignColumns: [newsletters.id],
       name: "newsletter_subscriptions_newsletter_id_newsletters_id_fk",
     }).onDelete("cascade"),
-    emailUniqueIndex: uniqueIndex("newsletter_subscriptions_email_unique").on(
+    uniqueIndex("newsletter_subscriptions_email_unique").on(
       table.newsletterId,
       sql`lower(${table.email})`,
     ),
-    newsletterIdIndex: index("newsletter_subscriptions_newsletter_id_idx").on(
-      table.newsletterId,
-    ),
-  }),
+    index("newsletter_subscriptions_newsletter_id_idx").on(table.newsletterId),
+  ],
 );
 
 export const apiRateLimitWindows = pgTable(
@@ -162,15 +380,13 @@ export const apiRateLimitWindows = pgTable(
     }).notNull(),
     count: integer("count").notNull().default(1),
   },
-  (table) => ({
-    pk: primaryKey({
+  (table) => [
+    primaryKey({
       columns: [table.scope, table.identifierHash, table.windowStart],
       name: "api_rate_limit_windows_pkey",
     }),
-    expiresAtIndex: index("api_rate_limit_windows_expires_at_idx").on(
-      table.expiresAt,
-    ),
-  }),
+    index("api_rate_limit_windows_expires_at_idx").on(table.expiresAt),
+  ],
 );
 
 export type User = typeof users.$inferSelect;
@@ -186,3 +402,22 @@ export type NewNewsletterSubscription =
   typeof newsletterSubscriptions.$inferInsert;
 export type ApiRateLimitWindow = typeof apiRateLimitWindows.$inferSelect;
 export type NewApiRateLimitWindow = typeof apiRateLimitWindows.$inferInsert;
+
+export type Member = typeof members.$inferSelect;
+export type NewMember = typeof members.$inferInsert;
+export type Address = typeof addresses.$inferSelect;
+export type NewAddress = typeof addresses.$inferInsert;
+export type Contact = typeof contacts.$inferSelect;
+export type NewContact = typeof contacts.$inferInsert;
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+export type Module = typeof modules.$inferSelect;
+export type NewModule = typeof modules.$inferInsert;
+export type Permission = typeof permissions.$inferSelect;
+export type NewPermission = typeof permissions.$inferInsert;
+export type Role = typeof roles.$inferSelect;
+export type NewRole = typeof roles.$inferInsert;
+export type RolePermission = typeof rolePermissions.$inferSelect;
+export type NewRolePermission = typeof rolePermissions.$inferInsert;
+export type MemberRole = typeof memberRoles.$inferSelect;
+export type NewMemberRole = typeof memberRoles.$inferInsert;

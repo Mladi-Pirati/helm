@@ -57,6 +57,13 @@
       "when": 1779146754116,
       "tag": "0008_brief_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779972946574,
+      "tag": "0008_lumpy_professor_monster",
+      "breakpoints": true
     }
   ]
 }
