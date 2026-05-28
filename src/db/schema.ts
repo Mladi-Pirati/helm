@@ -173,7 +173,11 @@ export const memberships = pgTable(
     expiresAt: timestamp("expires_at", {
       withTimezone: true,
       mode: "date",
-    }).notNull(),
+    }),
+    endedAt: timestamp("ended_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     ...timestamps,
   },
   (table) => [

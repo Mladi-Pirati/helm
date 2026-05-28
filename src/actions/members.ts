@@ -1,0 +1,695 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { and, eq, inArray, max } from "drizzle-orm";
+import { z } from "zod";
+
+import { db } from "@/db";
+import {
+  addresses,
+  contacts,
+  memberRoles,
+  members,
+  memberships,
+  roles,
+  type ContactType,
+} from "@/db/schema";
+import { getCurrentUser } from "@/lib/auth/session";
+import { hasPermission } from "@/lib/auth/permissions";
+import { createKeycloakAdminClient } from "@/lib/keycloak/admin-client";
+import { roleGrantsAnyPermission } from "@/lib/members-query";
+import {
+  addressInputSchema,
+  contactInputSchema,
+  createMemberSchema,
+  memberProfileSchema,
+  membershipRenewalSchema,
+  reorderContactsSchema,
+  roleAssignmentSchema,
+  type AddressInput,
+  type ContactInput,
+  type CreateMemberInput,
+  type MemberProfileInput,
+  type MembershipRenewalInput,
+  type RoleAssignmentInput,
+} from "@/lib/validation/members";
+
+type ActionSuccess = { ok: true; message?: string };
+type ActionFailure<TField extends string = string> = {
+  ok: false;
+  fieldErrors?: Partial<Record<TField, string>>;
+  message: string;
+};
+
+type ActionResult<T = ActionSuccess, TField extends string = string> =
+  | T
+  | ActionFailure<TField>;
+
+const CRITICAL_SELF_PERMISSIONS = [
+  "members.role_management",
+  "access-control.manage_roles",
+];
+
+const searchKeycloakUsersSchema = z.object({
+  q: z.string().trim().min(1).max(120),
+});
+
+const roleAssignmentsSchema = z.object({
+  assignments: z.array(roleAssignmentSchema),
+});
+
+type DbExecutor = {
+  insert: typeof db.insert;
+  query: typeof db.query;
+  select: typeof db.select;
+  update: typeof db.update;
+};
+
+function isUniqueViolation(error: unknown) {
+  let currentError: unknown = error;
+  while (typeof currentError === "object" && currentError !== null) {
+    if ("code" in currentError && currentError.code === "23505") return true;
+    if (!("cause" in currentError)) return false;
+    currentError = currentError.cause;
+  }
+  return false;
+}
+
+async function requireMembersPermission(permissionKey: string) {
+  const allowed = await hasPermission(permissionKey);
+  if (!allowed) {
+    return {
+      ok: false as const,
+      message: "You are not allowed to manage members.",
+    };
+  }
+  return { ok: true as const };
+}
+
+async function getCurrentMemberId() {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const member = await db.query.members.findFirst({
+    columns: { id: true },
+    where: eq(members.keycloakId, user.keycloakUserId),
+  });
+
+  return member?.id ?? null;
+}
+
+async function getMemberIdentity(memberId: string) {
+  return db.query.members.findFirst({
+    columns: {
+      disabledAt: true,
+      firstName: true,
+      id: true,
+      keycloakId: true,
+      lastName: true,
+      username: true,
+    },
+    where: eq(members.id, memberId),
+  });
+}
+
+async function ensurePrimaryEmail(
+  memberId: string,
+  email: string,
+  tx: DbExecutor = db,
+) {
+  const existingEmail = await tx.query.contacts.findFirst({
+    columns: { id: true },
+    where: and(eq(contacts.memberId, memberId), eq(contacts.type, "email")),
+  });
+
+  await tx
+    .update(contacts)
+    .set({ isPrimary: false })
+    .where(and(eq(contacts.memberId, memberId), eq(contacts.type, "email")));
+
+  if (existingEmail) {
+    await tx
+      .update(contacts)
+      .set({ isPrimary: true, value: email })
+      .where(eq(contacts.id, existingEmail.id));
+    return;
+  }
+
+  const [sortRow] = await tx
+    .select({ value: max(contacts.sortOrder) })
+    .from(contacts)
+    .where(eq(contacts.memberId, memberId));
+
+  await tx.insert(contacts).values({
+    isPrimary: true,
+    memberId,
+    sortOrder: Number(sortRow?.value ?? -1) + 1,
+    type: "email",
+    value: email,
+  });
+}
+
+function revalidateMembers(memberId?: string) {
+  revalidatePath("/admin/members");
+  if (memberId) revalidatePath(`/admin/members/${memberId}`);
+}
+
+export async function searchKeycloakUsersAction(query: string): Promise<
+  ActionResult<{
+    ok: true;
+    users: {
+      email: string | null;
+      enabled: boolean;
+      firstName: string | null;
+      fullName: string;
+      id: string;
+      lastName: string | null;
+      username: string;
+    }[];
+  }>
+> {
+  const access = await requireMembersPermission("members.create");
+  if (!access.ok) return access;
+
+  const parsed = searchKeycloakUsersSchema.safeParse({ q: query });
+  if (!parsed.success) return { ok: true, users: [] };
+
+  try {
+    const users = await createKeycloakAdminClient().searchUsers(parsed.data.q);
+    return { ok: true, users };
+  } catch {
+    return {
+      ok: false,
+      message: "Unable to search Keycloak users right now.",
+    };
+  }
+}
+
+export async function createMemberAction(
+  values: CreateMemberInput,
+): Promise<ActionResult<ActionSuccess & { memberId: string }, keyof CreateMemberInput>> {
+  const access = await requireMembersPermission("members.create");
+  if (!access.ok) return access;
+
+  const parsed = createMemberSchema.safeParse(values);
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: {
+        firstName: fieldErrors.firstName?.[0],
+        keycloakId: fieldErrors.keycloakId?.[0],
+        lastName: fieldErrors.lastName?.[0],
+        primaryEmail: fieldErrors.primaryEmail?.[0],
+        username: fieldErrors.username?.[0],
+      },
+    };
+  }
+
+  try {
+    const keycloakUser = await createKeycloakAdminClient().getUser(
+      parsed.data.keycloakId,
+    );
+    const [member] = await db.transaction(async (tx) => {
+      const createdMembers = await tx
+        .insert(members)
+        .values({
+          firstName: parsed.data.firstName || keycloakUser.firstName || "",
+          keycloakId: parsed.data.keycloakId,
+          lastName: parsed.data.lastName || keycloakUser.lastName || "",
+          notes: parsed.data.notes,
+          username: parsed.data.username || keycloakUser.username,
+        })
+        .returning({ id: members.id });
+
+      if (!createdMembers[0]) return [];
+      await ensurePrimaryEmail(
+        createdMembers[0].id,
+        parsed.data.primaryEmail,
+        tx,
+      );
+      return createdMembers;
+    });
+
+    if (!member) {
+      return { ok: false, message: "Unable to create the member." };
+    }
+
+    revalidateMembers(member.id);
+    return {
+      ok: true,
+      memberId: member.id,
+      message: "Member created successfully.",
+    };
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return {
+        ok: false,
+        message: "That Keycloak user is already linked to a member.",
+        fieldErrors: {
+          keycloakId: "That Keycloak user is already linked to a member.",
+        },
+      };
+    }
+    return { ok: false, message: "Unable to create the member right now." };
+  }
+}
+
+export async function updateMemberProfileAction(
+  memberId: string,
+  values: MemberProfileInput,
+): Promise<ActionResult<ActionSuccess, keyof MemberProfileInput>> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const parsed = memberProfileSchema.safeParse(values);
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: {
+        firstName: fieldErrors.firstName?.[0],
+        lastName: fieldErrors.lastName?.[0],
+        primaryEmail: fieldErrors.primaryEmail?.[0],
+        username: fieldErrors.username?.[0],
+      },
+    };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  try {
+    await createKeycloakAdminClient().updateUserProfile(member.keycloakId, {
+      email: parsed.data.primaryEmail,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      username: parsed.data.username,
+    });
+  } catch {
+    return {
+      ok: false,
+      message: "Keycloak could not be updated. Local data was not changed.",
+    };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(members)
+      .set({
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        notes: parsed.data.notes ?? "",
+        username: parsed.data.username,
+      })
+      .where(eq(members.id, memberId));
+    await ensurePrimaryEmail(memberId, parsed.data.primaryEmail, tx);
+  });
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Member profile updated successfully." };
+}
+
+export async function syncMemberFromKeycloakAction(
+  memberId: string,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  try {
+    const keycloakUser = await createKeycloakAdminClient().getUser(
+      member.keycloakId,
+    );
+    await db.transaction(async (tx) => {
+      await tx
+        .update(members)
+        .set({
+          firstName: keycloakUser.firstName ?? "",
+          lastName: keycloakUser.lastName ?? "",
+          username: keycloakUser.username,
+        })
+        .where(eq(members.id, memberId));
+
+      if (keycloakUser.email) {
+        await ensurePrimaryEmail(memberId, keycloakUser.email, tx);
+      }
+    });
+  } catch {
+    return { ok: false, message: "Unable to sync from Keycloak right now." };
+  }
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Member synced from Keycloak." };
+}
+
+export async function setMemberDisabledAction(
+  memberId: string,
+  disabled: boolean,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const currentMemberId = await getCurrentMemberId();
+  if (disabled && currentMemberId === memberId) {
+    return { ok: false, message: "You cannot disable your own member account." };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  try {
+    const keycloak = createKeycloakAdminClient();
+    if (disabled) {
+      await keycloak.removeAllClientRoles(member.keycloakId);
+    } else {
+      await keycloak.ensureDefaultClientRole(member.keycloakId);
+    }
+  } catch {
+    return {
+      ok: false,
+      message: "Keycloak access could not be updated. Local status was not changed.",
+    };
+  }
+
+  await db
+    .update(members)
+    .set({ disabledAt: disabled ? new Date() : null })
+    .where(eq(members.id, memberId));
+
+  revalidateMembers(memberId);
+  return {
+    ok: true,
+    message: disabled ? "Member disabled." : "Member re-enabled.",
+  };
+}
+
+export async function upsertContactAction(
+  memberId: string,
+  values: ContactInput,
+  contactId?: string,
+): Promise<ActionResult<ActionSuccess, keyof ContactInput>> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const parsed = contactInputSchema.safeParse(values);
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: {
+        label: fieldErrors.label?.[0],
+        type: fieldErrors.type?.[0],
+        value: fieldErrors.value?.[0],
+      },
+    };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  if (parsed.data.type === "email" && parsed.data.isPrimary) {
+    try {
+      await createKeycloakAdminClient().updateUserProfile(member.keycloakId, {
+        email: parsed.data.value,
+        firstName: member.firstName,
+        lastName: member.lastName,
+        username: member.username,
+      });
+    } catch {
+      return {
+        ok: false,
+        message: "Keycloak email could not be updated. Local data was not changed.",
+      };
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    if (parsed.data.isPrimary) {
+      await tx
+        .update(contacts)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(contacts.memberId, memberId),
+            eq(contacts.type, parsed.data.type as ContactType),
+          ),
+        );
+    }
+
+    if (contactId) {
+      await tx
+        .update(contacts)
+        .set(parsed.data)
+        .where(and(eq(contacts.id, contactId), eq(contacts.memberId, memberId)));
+      return;
+    }
+
+    const [sortRow] = await tx
+      .select({ value: max(contacts.sortOrder) })
+      .from(contacts)
+      .where(eq(contacts.memberId, memberId));
+
+    await tx.insert(contacts).values({
+      ...parsed.data,
+      memberId,
+      sortOrder: Number(sortRow?.value ?? -1) + 1,
+    });
+  });
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Contact saved successfully." };
+}
+
+export async function deleteContactAction(
+  memberId: string,
+  contactId: string,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  await db
+    .delete(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.memberId, memberId)));
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Contact deleted successfully." };
+}
+
+export async function reorderContactsAction(
+  memberId: string,
+  contactIds: string[],
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const parsed = reorderContactsSchema.safeParse({ contactIds });
+  if (!parsed.success) return { ok: false, message: "Invalid contact order." };
+
+  const rows = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.memberId, memberId));
+  const existingIds = new Set(rows.map((row) => row.id));
+
+  if (
+    existingIds.size !== parsed.data.contactIds.length ||
+    parsed.data.contactIds.some((id) => !existingIds.has(id))
+  ) {
+    return { ok: false, message: "Contact order is out of date." };
+  }
+
+  await db.transaction(async (tx) => {
+    for (const [index, contactId] of parsed.data.contactIds.entries()) {
+      await tx
+        .update(contacts)
+        .set({ sortOrder: -1000 - index })
+        .where(eq(contacts.id, contactId));
+    }
+    for (const [index, contactId] of parsed.data.contactIds.entries()) {
+      await tx
+        .update(contacts)
+        .set({ sortOrder: index })
+        .where(eq(contacts.id, contactId));
+    }
+  });
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Contact order saved." };
+}
+
+export async function upsertAddressAction(
+  memberId: string,
+  values: AddressInput,
+  addressId?: string,
+): Promise<ActionResult<ActionSuccess, keyof AddressInput>> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const parsed = addressInputSchema.safeParse(values);
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: {
+        city: fieldErrors.city?.[0],
+        country: fieldErrors.country?.[0],
+        label: fieldErrors.label?.[0],
+        postalCode: fieldErrors.postalCode?.[0],
+        street: fieldErrors.street?.[0],
+      },
+    };
+  }
+
+  if (addressId) {
+    await db
+      .update(addresses)
+      .set(parsed.data)
+      .where(and(eq(addresses.id, addressId), eq(addresses.memberId, memberId)));
+  } else {
+    await db.insert(addresses).values({ ...parsed.data, memberId });
+  }
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Address saved successfully." };
+}
+
+export async function deleteAddressAction(
+  memberId: string,
+  addressId: string,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  await db
+    .delete(addresses)
+    .where(and(eq(addresses.id, addressId), eq(addresses.memberId, memberId)));
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Address deleted successfully." };
+}
+
+export async function appendMembershipRenewalAction(
+  memberId: string,
+  values: MembershipRenewalInput,
+): Promise<ActionResult<ActionSuccess, keyof MembershipRenewalInput>> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const parsed = membershipRenewalSchema.safeParse(values);
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      ok: false,
+      message: "Please fix the highlighted fields.",
+      fieldErrors: {
+        endedAt: fieldErrors.endedAt?.[0],
+        expiresAt: fieldErrors.expiresAt?.[0],
+        extendedAt: fieldErrors.extendedAt?.[0],
+      },
+    };
+  }
+
+  await db.insert(memberships).values({
+    endedAt: parsed.data.endedAt ? new Date(parsed.data.endedAt) : null,
+    expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+    extendedAt: new Date(parsed.data.extendedAt),
+    memberId,
+  });
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Membership renewal added." };
+}
+
+export async function endMembershipAction(
+  memberId: string,
+  membershipId: string,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const [membership] = await db
+    .select({ id: memberships.id })
+    .from(memberships)
+    .where(and(eq(memberships.id, membershipId), eq(memberships.memberId, memberId)))
+    .limit(1);
+
+  if (!membership) {
+    return { ok: false, message: "That membership could not be found." };
+  }
+
+  await db
+    .update(memberships)
+    .set({ endedAt: new Date() })
+    .where(eq(memberships.id, membershipId));
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Membership ended." };
+}
+
+export async function updateMemberRolesAction(
+  memberId: string,
+  assignments: RoleAssignmentInput[],
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.role_management");
+  if (!access.ok) return access;
+
+  const parsed = roleAssignmentsSchema.safeParse({ assignments });
+  if (!parsed.success) {
+    return { ok: false, message: "Please choose valid roles." };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  const roleIds = parsed.data.assignments.map((assignment) => assignment.roleId);
+  if (roleIds.length) {
+    const existingRoles = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(inArray(roles.id, roleIds));
+    if (existingRoles.length !== roleIds.length) {
+      return { ok: false, message: "One or more roles could not be found." };
+    }
+  }
+
+  const currentMemberId = await getCurrentMemberId();
+  if (currentMemberId === memberId) {
+    const keepsCriticalAccess = await roleGrantsAnyPermission(
+      roleIds,
+      CRITICAL_SELF_PERMISSIONS,
+    );
+    if (!keepsCriticalAccess) {
+      return {
+        ok: false,
+        message: "You cannot remove your own member management access.",
+      };
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(memberRoles).where(eq(memberRoles.memberId, memberId));
+    if (parsed.data.assignments.length === 0) return;
+
+    await tx.insert(memberRoles).values(
+      parsed.data.assignments.map((assignment) => ({
+        expiresAt: assignment.expiresAt
+          ? new Date(assignment.expiresAt)
+          : null,
+        grantedAt: new Date(),
+        grantedBy: currentMemberId,
+        memberId,
+        roleId: assignment.roleId,
+      })),
+    );
+  });
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Member roles updated successfully." };
+}

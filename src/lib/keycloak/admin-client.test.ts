@@ -112,8 +112,8 @@ describe("Keycloak admin client", () => {
         .filter((request) => request.url?.endsWith("/admin/realms/demo/users"))
         .map((request) => request.params),
     ).toEqual([
-      { first: 0, max: 1 },
-      { first: 1, max: 1 },
+      { briefRepresentation: false, first: 0, max: 1 },
+      { briefRepresentation: false, first: 1, max: 1 },
     ]);
   });
 
@@ -167,5 +167,175 @@ describe("Keycloak admin client", () => {
     expect(JSON.parse(String(grantRequest?.data))).toEqual([
       { id: "role-id", name: "user" },
     ]);
+  });
+
+  test("searches users with full representations and deduplicates search, username, and email matches", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/users")) {
+        if ((config.params as { search?: string }).search) {
+          return [
+            {
+              email: "ana@example.test",
+              firstName: "Ana",
+              id: "1",
+              lastName: "Novak",
+              username: "ana",
+            },
+          ];
+        }
+
+        if ((config.params as { email?: string }).email) {
+          return [
+            {
+              email: "ana@example.test",
+              firstName: "Ana",
+              id: "1",
+              lastName: "Novak",
+              username: "ana",
+            },
+          ];
+        }
+
+        return [
+          {
+            email: "bor@example.test",
+            firstName: "Bor",
+            id: "2",
+            lastName: "Horvat",
+            username: "bor",
+          },
+        ];
+      }
+
+      throw new Error(`Unexpected request ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await expect(client.searchUsers(" ana@example.test ", 7)).resolves.toEqual([
+      {
+        email: "ana@example.test",
+        enabled: true,
+        firstName: "Ana",
+        fullName: "Ana Novak",
+        id: "1",
+        lastName: "Novak",
+        username: "ana",
+      },
+      {
+        email: "bor@example.test",
+        enabled: true,
+        firstName: "Bor",
+        fullName: "Bor Horvat",
+        id: "2",
+        lastName: "Horvat",
+        username: "bor",
+      },
+    ]);
+
+    expect(
+      requests
+        .filter((request) => request.url?.endsWith("/admin/realms/demo/users"))
+        .map((request) => request.params),
+    ).toEqual([
+      {
+        briefRepresentation: false,
+        first: 0,
+        max: 7,
+        search: "ana@example.test",
+      },
+      {
+        briefRepresentation: false,
+        first: 0,
+        max: 7,
+        username: "ana@example.test",
+      },
+      {
+        briefRepresentation: false,
+        email: "ana@example.test",
+        first: 0,
+        max: 7,
+      },
+    ]);
+  });
+
+  test("updates a Keycloak user's editable profile fields without dropping existing representation fields", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (
+        config.method === "get" &&
+        config.url?.endsWith("/admin/realms/demo/users/user-1")
+      ) {
+        return {
+          attributes: { locale: ["sl"] },
+          email: "old@example.test",
+          emailVerified: true,
+          enabled: true,
+          firstName: "Old",
+          id: "user-1",
+          lastName: "Name",
+          username: "old",
+        };
+      }
+
+      if (config.method === "put") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.updateUserProfile("user-1", {
+      email: "ana@example.test",
+      firstName: "Ana",
+      lastName: "Novak",
+      username: "ana",
+    });
+
+    const updateRequest = requests.find(
+      (request) => request.method === "put",
+    );
+    expect(updateRequest?.url).toBe(
+      "https://sso.example.test/admin/realms/demo/users/user-1",
+    );
+    expect(JSON.parse(String(updateRequest?.data))).toEqual({
+      attributes: { locale: ["sl"] },
+      email: "ana@example.test",
+      emailVerified: true,
+      enabled: true,
+      firstName: "Ana",
+      id: "user-1",
+      lastName: "Novak",
+      username: "ana",
+    });
   });
 });

@@ -40,6 +40,16 @@ const keycloakUserSchema = z
   }));
 
 const keycloakUsersResponseSchema = z.array(keycloakUserSchema);
+const keycloakUserRepresentationSchema = z
+  .object({
+    id: z.string().min(1),
+    username: z.string().min(1),
+    email: z.string().nullable().optional(),
+    enabled: z.boolean().optional(),
+    firstName: z.string().nullable().optional(),
+    lastName: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 const keycloakClientSchema = z.object({
   id: z.string().min(1),
@@ -66,6 +76,12 @@ export type KeycloakAdminConfig = {
 
 export type KeycloakUser = z.infer<typeof keycloakUserSchema>;
 export type KeycloakClientRole = z.infer<typeof keycloakRoleSchema>;
+export type KeycloakUserProfileUpdate = {
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  username: string;
+};
 
 export class KeycloakAdminError extends Error {
   constructor(message: string) {
@@ -153,6 +169,7 @@ class KeycloakAdminClient {
 
     while (true) {
       const response = await this.get(`${this.config.adminBaseUrl}/users`, {
+        briefRepresentation: false,
         first,
         max: this.pageSize,
       });
@@ -168,11 +185,56 @@ class KeycloakAdminClient {
     }
   }
 
+  async searchUsers(query: string, max = 10) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return [];
+
+    const baseParams = {
+      briefRepresentation: false,
+      first: 0,
+      max,
+    } as const;
+    const queryResults = await Promise.all([
+      this.get(`${this.config.adminBaseUrl}/users`, {
+        ...baseParams,
+        search: trimmedQuery,
+      }),
+      this.get(`${this.config.adminBaseUrl}/users`, {
+        ...baseParams,
+        username: trimmedQuery,
+      }),
+      this.get(`${this.config.adminBaseUrl}/users`, {
+        ...baseParams,
+        email: trimmedQuery,
+      }),
+    ]);
+    const usersById = new Map<string, KeycloakUser>();
+
+    for (const result of queryResults) {
+      for (const user of keycloakUsersResponseSchema.parse(result)) {
+        usersById.set(user.id, user);
+      }
+    }
+
+    return Array.from(usersById.values()).slice(0, max);
+  }
+
   async getUser(userId: string) {
-    return keycloakUserSchema.parse(
-      await this.get(
-        `${this.config.adminBaseUrl}/users/${encodeURIComponent(userId)}`,
-      ),
+    return keycloakUserSchema.parse(await this.getUserRepresentation(userId));
+  }
+
+  async updateUserProfile(
+    userId: string,
+    values: KeycloakUserProfileUpdate,
+  ) {
+    const currentUser = await this.getUserRepresentation(userId);
+
+    await this.put(
+      `${this.config.adminBaseUrl}/users/${encodeURIComponent(userId)}`,
+      {
+        ...currentUser,
+        ...values,
+      },
     );
   }
 
@@ -258,7 +320,18 @@ class KeycloakAdminClient {
     return client.id;
   }
 
-  private async get(url: string, params?: Record<string, string | number>) {
+  private async getUserRepresentation(userId: string) {
+    return keycloakUserRepresentationSchema.parse(
+      await this.get(
+        `${this.config.adminBaseUrl}/users/${encodeURIComponent(userId)}`,
+      ),
+    );
+  }
+
+  private async get(
+    url: string,
+    params?: Record<string, boolean | number | string>,
+  ) {
     const response = await this.http.get(url, {
       headers: await this.getAuthorizationHeaders(),
       params,
@@ -269,6 +342,12 @@ class KeycloakAdminClient {
 
   private async post(url: string, data: unknown) {
     await this.http.post(url, data, {
+      headers: await this.getAuthorizationHeaders(),
+    });
+  }
+
+  private async put(url: string, data: unknown) {
+    await this.http.put(url, data, {
       headers: await this.getAuthorizationHeaders(),
     });
   }
