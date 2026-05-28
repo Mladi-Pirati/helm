@@ -39,10 +39,7 @@ export default async function AdminLayout({
           </div>
           <Separator />
           <div className="flex-1 p-4">
-            <AdminNavLinks
-              forcePasswordChange={user.forcePasswordChange}
-              isAdmin={user.role === "admin"}
-            />
+            <AdminNavLinks isAdmin={user.role === "admin"} />
           </div>
           <Separator />
           <div className="flex items-center justify-between p-4">
@@ -88,7 +85,6 @@ export default async function AdminLayout({
                 </Link>
               </div>
               <AdminMobileNav
-                forcePasswordChange={user.forcePasswordChange}
                 fullName={user.fullName}
                 role={user.role}
                 username={user.username}

@@ -15,6 +15,9 @@ COPY . .
 # from the container environment.
 RUN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/applications \
     AUTH_SECRET="$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+    KEYCLOAK_CLIENT_ID=applications-receiver \
+    KEYCLOAK_CLIENT_SECRET=build-placeholder \
+    KEYCLOAK_ISSUER=https://keycloak.example.com/realms/build \
     NEXT_TELEMETRY_DISABLED=1 \
     bun run build
 

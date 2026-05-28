@@ -1,16 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { unstable_update } from "@/auth";
 import { db } from "@/db";
 import { type UserRole, users } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
-import { hashPassword } from "@/lib/auth/password";
+import { getCurrentUser } from "@/lib/auth/session";
+import { createKeycloakAdminClient } from "@/lib/keycloak/admin-client";
 import {
-  createUserSchema,
-  type CreateUserInput,
   updateUserSchema,
   type UpdateUserInput,
 } from "@/lib/validation/users";
@@ -26,10 +23,6 @@ type UserActionFailure<TField extends string> = {
   fieldErrors?: Partial<Record<TField, string>>;
 };
 
-type CreateUserActionResult =
-  | UserActionSuccess
-  | UserActionFailure<keyof CreateUserInput>;
-
 type UpdateUserActionResult =
   | UserActionSuccess
   | UserActionFailure<keyof UpdateUserInput>;
@@ -44,13 +37,12 @@ type DeleteUserActionResult =
       message: string;
     };
 
-function isUniqueViolation(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    error.code === "23505"
-  );
+function getKeycloakErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Keycloak could not be reached.";
 }
 
 async function requireUserManagementAdmin() {
@@ -60,13 +52,6 @@ async function requireUserManagementAdmin() {
     return {
       ok: false as const,
       message: "You are not allowed to manage users.",
-    };
-  }
-
-  if (shouldForcePasswordChange(user)) {
-    return {
-      ok: false as const,
-      message: "Change your password before managing users.",
     };
   }
 
@@ -89,6 +74,7 @@ async function getManagedUser(userId: string) {
     columns: {
       id: true,
       fullName: true,
+      keycloakUserId: true,
       username: true,
       role: true,
       forcePasswordChange: true,
@@ -123,83 +109,6 @@ function isLastAdmin(role: UserRole, adminCount: number) {
   return role === "admin" && adminCount <= 1;
 }
 
-export async function createUserAction(
-  values: CreateUserInput,
-): Promise<CreateUserActionResult> {
-  const access = await requireUserManagementAdmin();
-
-  if (!access.ok) {
-    return {
-      ok: false,
-      message: access.message,
-    };
-  }
-
-  const parsedValues = createUserSchema.safeParse(values);
-
-  if (!parsedValues.success) {
-    const fieldErrors = parsedValues.error.flatten().fieldErrors;
-
-    return {
-      ok: false,
-      message: "Please fix the highlighted fields.",
-      fieldErrors: {
-        fullName: fieldErrors.fullName?.[0],
-        username: fieldErrors.username?.[0],
-        initialPassword: fieldErrors.initialPassword?.[0],
-        role: fieldErrors.role?.[0],
-      },
-    };
-  }
-
-  const existingUser = await db.query.users.findFirst({
-    where: eq(users.username, parsedValues.data.username),
-    columns: {
-      id: true,
-    },
-  });
-
-  if (existingUser) {
-    return {
-      ok: false,
-      message: "That username is already taken.",
-      fieldErrors: {
-        username: "That username is already taken.",
-      },
-    };
-  }
-
-  const passwordHash = await hashPassword(parsedValues.data.initialPassword);
-
-  try {
-    await db.insert(users).values({
-      fullName: parsedValues.data.fullName,
-      username: parsedValues.data.username,
-      passwordHash,
-      forcePasswordChange: true,
-      role: parsedValues.data.role,
-    });
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return {
-        ok: false,
-        message: "That username is already taken.",
-        fieldErrors: {
-          username: "That username is already taken.",
-        },
-      };
-    }
-
-    throw error;
-  }
-
-  revalidatePath("/admin/users");
-
-  return {
-    ok: true,
-  };
-}
-
 export async function updateUserAction(
   userId: string,
   values: UpdateUserInput,
@@ -231,30 +140,7 @@ export async function updateUserAction(
       ok: false,
       message: "Please fix the highlighted fields.",
       fieldErrors: {
-        fullName: fieldErrors.fullName?.[0],
-        username: fieldErrors.username?.[0],
         role: fieldErrors.role?.[0],
-        temporaryPassword: fieldErrors.temporaryPassword?.[0],
-      },
-    };
-  }
-
-  const existingUser = await db.query.users.findFirst({
-    where: and(
-      eq(users.username, parsedValues.data.username),
-      ne(users.id, userId),
-    ),
-    columns: {
-      id: true,
-    },
-  });
-
-  if (existingUser) {
-    return {
-      ok: false,
-      message: "That username is already taken.",
-      fieldErrors: {
-        username: "That username is already taken.",
       },
     };
   }
@@ -269,16 +155,6 @@ export async function updateUserAction(
       message: "You cannot change your own role from the users table.",
       fieldErrors: {
         role: "Change your own role outside of the users table.",
-      },
-    };
-  }
-
-  if (isSelf && parsedValues.data.temporaryPassword) {
-    return {
-      ok: false,
-      message: "Use Settings to change your own password.",
-      fieldErrors: {
-        temporaryPassword: "Use Settings to change your own password.",
       },
     };
   }
@@ -298,52 +174,12 @@ export async function updateUserAction(
   }
 
   const updateValues: {
-    fullName: string;
-    username: string;
     role: UserRole;
-    passwordHash?: string;
-    forcePasswordChange?: boolean;
   } = {
-    fullName: parsedValues.data.fullName,
-    username: parsedValues.data.username,
     role: parsedValues.data.role,
   };
 
-  if (parsedValues.data.temporaryPassword) {
-    updateValues.passwordHash = await hashPassword(
-      parsedValues.data.temporaryPassword,
-    );
-    updateValues.forcePasswordChange = true;
-  }
-
-  try {
-    await db.update(users).set(updateValues).where(eq(users.id, userId));
-  } catch (error) {
-    if (isUniqueViolation(error)) {
-      return {
-        ok: false,
-        message: "That username is already taken.",
-        fieldErrors: {
-          username: "That username is already taken.",
-        },
-      };
-    }
-
-    throw error;
-  }
-
-  if (
-    isSelf &&
-    (parsedValues.data.fullName !== target.user.fullName ||
-      parsedValues.data.username !== target.user.username)
-  ) {
-    await unstable_update({
-      user: {
-        fullName: parsedValues.data.fullName,
-        username: parsedValues.data.username,
-      },
-    });
-  }
+  await db.update(users).set(updateValues).where(eq(users.id, userId));
 
   revalidatePath("/admin");
   revalidatePath("/admin/settings");
@@ -390,6 +226,21 @@ export async function deleteUserAction(
       return {
         ok: false,
         message: "You cannot delete the last remaining admin.",
+      };
+    }
+  }
+
+  if (target.user.keycloakUserId) {
+    try {
+      await createKeycloakAdminClient().removeAllClientRoles(
+        target.user.keycloakUserId,
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        message: `Unable to remove Keycloak client roles: ${getKeycloakErrorMessage(
+          error,
+        )}`,
       };
     }
   }

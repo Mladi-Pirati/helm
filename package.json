@@ -11,14 +11,14 @@
     "format": "bun prettier:format && bun lint --fix",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "bootstrap:admin": "bun run scripts/bootstrap-admin.ts"
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@react-pdf/renderer": "^4.5.1",
     "@tanstack/react-table": "^8.21.3",
     "argon2": "^0.44.0",
+    "axios": "^1.16.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

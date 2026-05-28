@@ -369,7 +369,7 @@ export async function POST(request: Request) {
     await sendDiscordEmbedNotification({
       title: "New Membership Application",
       description: "A new membership application is ready for review.",
-      adminPath: "/admin/membership-applications",
+      adminPath: "/admin/members/applications",
       color: 0x22c55e,
       fields: [
         {

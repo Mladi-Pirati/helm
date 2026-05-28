@@ -7,6 +7,7 @@ declare module "next-auth" {
     user: DefaultSession["user"] & {
       id: string;
       fullName: string;
+      keycloakUserId: string;
       username: string;
       forcePasswordChange: boolean;
       role: UserRole;
@@ -16,6 +17,7 @@ declare module "next-auth" {
   interface User {
     id: string;
     fullName: string;
+    keycloakUserId: string;
     username: string;
     forcePasswordChange: boolean;
     role: UserRole;
@@ -25,6 +27,7 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     fullName?: string;
+    keycloakUserId?: string;
     username?: string;
     forcePasswordChange?: boolean;
     role?: UserRole;

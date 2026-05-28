@@ -18,14 +18,12 @@ import { ListIcon, LogOutIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 
 type AdminMobileNavProps = {
-  forcePasswordChange: boolean;
   fullName: string;
   username: string;
   role: "admin" | "viewer";
 };
 
 export function AdminMobileNav({
-  forcePasswordChange,
   fullName,
   username,
   role,
@@ -56,7 +54,6 @@ export function AdminMobileNav({
         </SheetHeader>
         <div className="grid gap-4 p-4">
           <AdminNavLinks
-            forcePasswordChange={forcePasswordChange}
             isAdmin={role === "admin"}
             onNavigate={() => setOpen(false)}
           />

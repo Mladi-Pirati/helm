@@ -1,0 +1,171 @@
+import { describe, expect, test } from "bun:test";
+import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from "axios";
+
+import {
+  createKeycloakAdminClient,
+  getKeycloakAdminConfigFromEnv,
+} from "@/lib/keycloak/admin-client";
+
+type RecordedRequest = {
+  data?: unknown;
+  headers?: AxiosRequestConfig["headers"];
+  method?: string;
+  params?: unknown;
+  url?: string;
+};
+
+function createAdapter(
+  handler: (config: AxiosRequestConfig) => unknown,
+): {
+  adapter: AxiosAdapter;
+  requests: RecordedRequest[];
+} {
+  const requests: RecordedRequest[] = [];
+
+  return {
+    requests,
+    adapter: async (config) => {
+      requests.push({
+        data: config.data,
+        headers: config.headers,
+        method: config.method,
+        params: config.params,
+        url: config.url,
+      });
+
+      return {
+        config,
+        data: handler(config),
+        headers: {},
+        status: 200,
+        statusText: "OK",
+      } satisfies AxiosResponse;
+    },
+  };
+}
+
+describe("getKeycloakAdminConfigFromEnv", () => {
+  test("derives realm and admin base URL from the issuer", () => {
+    const config = getKeycloakAdminConfigFromEnv({
+      KEYCLOAK_CLIENT_ID: "applications",
+      KEYCLOAK_CLIENT_SECRET: "secret",
+      KEYCLOAK_ISSUER: "https://sso.example.test/realms/mladi-pirati/",
+    });
+
+    expect(config).toEqual({
+      clientId: "applications",
+      clientSecret: "secret",
+      issuer: "https://sso.example.test/realms/mladi-pirati",
+      realm: "mladi-pirati",
+      adminBaseUrl: "https://sso.example.test/admin/realms/mladi-pirati",
+      defaultClientRoleName: "user",
+    });
+  });
+});
+
+describe("Keycloak admin client", () => {
+  test("fetches all users across paginated responses", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/users")) {
+        if ((config.params as { first: number }).first === 0) {
+        return [
+          { id: "1", username: "ana", firstName: "Ana", lastName: "Novak" },
+        ];
+        }
+
+        return [];
+      }
+
+      throw new Error(`Unexpected request ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter, pageSize: 1 },
+    );
+
+    await expect(client.listUsers()).resolves.toEqual([
+      {
+        email: null,
+        enabled: true,
+        firstName: "Ana",
+        fullName: "Ana Novak",
+        id: "1",
+        lastName: "Novak",
+        username: "ana",
+      },
+    ]);
+
+    expect(
+      requests
+        .filter((request) => request.url?.endsWith("/admin/realms/demo/users"))
+        .map((request) => request.params),
+    ).toEqual([
+      { first: 0, max: 1 },
+      { first: 1, max: 1 },
+    ]);
+  });
+
+  test("grants the default client role only when missing", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/clients")) {
+        return [{ id: "client-uuid", clientId: "applications" }];
+      }
+
+      if (config.url?.endsWith("/role-mappings/clients/client-uuid")) {
+        return [];
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/clients/client-uuid/roles/user")) {
+        return { id: "role-id", name: "user" };
+      }
+
+      if (config.method === "post") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.ensureDefaultClientRole("user-1");
+
+    const grantRequest = requests.find(
+      (request) =>
+        request.method === "post" &&
+        request.url?.includes("/role-mappings/clients/"),
+    );
+    expect(grantRequest?.url).toBe(
+      "https://sso.example.test/admin/realms/demo/users/user-1/role-mappings/clients/client-uuid",
+    );
+    expect(JSON.parse(String(grantRequest?.data))).toEqual([
+      { id: "role-id", name: "user" },
+    ]);
+  });
+});

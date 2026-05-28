@@ -272,7 +272,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(discordPayload.embeds[0]).toMatchObject({
       title: "New Membership Application",
       description: "A new membership application is ready for review.",
-      url: "https://admin.test/admin/membership-applications",
+      url: "https://admin.test/admin/members/applications",
       color: 0x22c55e,
       fields: [
         {

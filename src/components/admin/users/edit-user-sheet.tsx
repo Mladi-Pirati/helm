@@ -9,25 +9,13 @@ import { updateUserAction } from "@/actions/users";
 import { UserDetailsFields } from "@/components/admin/users/user-details-fields";
 import { UserFormSheet } from "@/components/admin/users/user-form-sheet";
 import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Form } from "@/components/ui/form";
 import { updateUserSchema, type UpdateUserInput } from "@/lib/validation/users";
 import type { UserRow } from "./users-management";
 
 function getDefaultValues(row: UserRow): UpdateUserInput {
   return {
-    fullName: row.fullName,
-    username: row.username,
     role: row.role,
-    temporaryPassword: "",
   };
 }
 
@@ -98,7 +86,7 @@ export function EditUserSheet({
   return (
     <Form {...form}>
       <UserFormSheet
-        description={`Update access details for ${row.fullName}.`}
+        description={`Update app access for ${row.fullName}.`}
         isPending={isPending}
         onOpenChange={handleOpenChange}
         onSubmit={onSubmit}
@@ -118,34 +106,6 @@ export function EditUserSheet({
           roleDescription={roleDescription}
           roleDisabled={isSelf || isLastAdmin}
         />
-        {isSelf ? (
-          <p className="text-xs text-muted-foreground">
-            Use Settings to change your own password.
-          </p>
-        ) : (
-          <FormField
-            control={form.control}
-            name="temporaryPassword"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Temporary password</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Leave blank to keep current password"
-                    type="password"
-                    {...field}
-                    value={field.value ?? ""}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Leave this empty to keep the existing password. If set, the
-                  user will be forced to change it on their next request.
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
       </UserFormSheet>
     </Form>
   );

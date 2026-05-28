@@ -122,8 +122,8 @@ export function buildMembershipApplicationsQueryString(
 
 export function buildMembershipApplicationsListHref(queryString: string) {
   return queryString
-    ? `/admin/membership-applications?${queryString}`
-    : "/admin/membership-applications";
+    ? `/admin/members/applications?${queryString}`
+    : "/admin/members/applications";
 }
 
 export function buildMembershipApplicationDetailsHref(
@@ -131,8 +131,8 @@ export function buildMembershipApplicationDetailsHref(
   queryString: string,
 ) {
   return queryString
-    ? `/admin/membership-applications/${applicationId}?${queryString}`
-    : `/admin/membership-applications/${applicationId}`;
+    ? `/admin/members/applications/${applicationId}?${queryString}`
+    : `/admin/members/applications/${applicationId}`;
 }
 
 export function getRejectionReasonWordCount(value: string) {

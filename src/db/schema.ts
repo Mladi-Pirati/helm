@@ -45,6 +45,7 @@ export const users = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
+    keycloakUserId: text("keycloak_user_id"),
     fullName: text("full_name").notNull(),
     username: text("username").notNull(),
     passwordHash: text("password_hash").notNull(),
@@ -57,6 +58,9 @@ export const users = pgTable(
   (table) => ({
     usernameUniqueIndex: uniqueIndex("users_username_unique").on(
       table.username,
+    ),
+    keycloakUserIdUniqueIndex: uniqueIndex("users_keycloak_user_id_unique").on(
+      table.keycloakUserId,
     ),
   }),
 );

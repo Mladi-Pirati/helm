@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { db } from "@/db";
 import { newsletters, newsletterSubscriptions } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import {
   buildNewsletterSubscriptionListHref,
   buildNewsletterSubscriptionQueryString,
@@ -46,8 +46,7 @@ export default async function AdminNewsletterPage({
 
   const filters = parseNewsletterSubscriptionFilters(await searchParams);
   const queryString = buildNewsletterSubscriptionQueryString(filters);
-  const canManage =
-    currentUser?.role === "admin" && !shouldForcePasswordChange(currentUser);
+  const canManage = currentUser?.role === "admin";
   const canDelete = canManage && !newsletter.archivedAt;
 
   const exportCsvHref = queryString

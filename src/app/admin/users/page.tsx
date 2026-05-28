@@ -12,6 +12,7 @@ export default async function AdminUsersPage() {
     .select({
       id: users.id,
       fullName: users.fullName,
+      keycloakUserId: users.keycloakUserId,
       username: users.username,
       role: users.role,
       createdAt: users.createdAt,

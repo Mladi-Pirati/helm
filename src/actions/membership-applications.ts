@@ -9,7 +9,7 @@ import {
   type MembershipApplicationStatus,
   mladiPiratiMembershipApplications,
 } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import {
   hasValidRejectionReason,
   reviewMembershipApplicationStatuses,
@@ -65,13 +65,6 @@ async function requireMembershipApplicationsAdmin() {
     return {
       ok: false as const,
       message: "You are not allowed to review membership applications.",
-    };
-  }
-
-  if (shouldForcePasswordChange(user)) {
-    return {
-      ok: false as const,
-      message: "Change your password before reviewing membership applications.",
     };
   }
 

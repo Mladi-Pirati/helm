@@ -6,7 +6,7 @@ import { MembershipApplicationsManagement } from "@/components/admin/membership-
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import {
   buildMembershipApplicationsListHref,
   buildMembershipApplicationsQueryString,
@@ -50,8 +50,7 @@ export default async function AdminMembershipApplicationsPage({
   const filters = parseMembershipApplicationsFilters(await searchParams);
   const queryString = buildMembershipApplicationsQueryString(filters);
   const whereClause = buildMembershipApplicationsWhere(filters);
-  const canDelete =
-    currentUser?.role === "admin" && !shouldForcePasswordChange(currentUser);
+  const canDelete = currentUser?.role === "admin";
 
   const exportCsvHref = queryString
     ? `/api/admin/membership-applications/export/csv?${queryString}`

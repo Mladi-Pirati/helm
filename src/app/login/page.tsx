@@ -10,11 +10,32 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  searchParams?: Promise<{
+    error?: string | string[];
+  }>;
+};
+
+function getLoginErrorMessage(error: string | string[] | undefined) {
+  const value = Array.isArray(error) ? error[0] : error;
+
+  if (value === "AccessDenied") {
+    return "Your Keycloak account is not allowed to access this application.";
+  }
+
+  if (value) {
+    return "Unable to sign in right now.";
+  }
+
+  return undefined;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
   const session = await auth();
+  const params = await searchParams;
 
   if (session?.user) {
-    redirect(session.user.forcePasswordChange ? "/admin/settings" : "/admin");
+    redirect("/admin");
   }
 
   return (
@@ -23,11 +44,11 @@ export default async function LoginPage() {
         <CardHeader className="border-b">
           <CardTitle>Admin login</CardTitle>
           <CardDescription>
-            Sign in with your username and password to access the admin panel.
+            Sign in with Keycloak to access the admin panel.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <LoginForm errorMessage={getLoginErrorMessage(params?.error)} />
         </CardContent>
       </Card>
     </main>

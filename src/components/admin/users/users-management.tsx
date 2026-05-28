@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-table";
 
 import type { UserRole } from "@/db/schema";
-import { AddUserSheet } from "@/components/admin/users/add-user-sheet";
 import { DeleteUserDialog } from "@/components/admin/users/delete-user-dialog";
 import { EditUserSheet } from "@/components/admin/users/edit-user-sheet";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +25,7 @@ import {
 export type UserRow = {
   id: string;
   fullName: string;
+  keycloakUserId: string | null;
   username: string;
   role: UserRole;
   createdAt: string;
@@ -99,7 +99,6 @@ export function UsersManagement({
         <div className="grid gap-1">
           <h1 className="text-xl font-semibold">Users</h1>
         </div>
-        <AddUserSheet />
       </div>
       <Card>
         <CardHeader className="border-b">

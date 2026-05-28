@@ -7,12 +7,11 @@ import { cn } from "@/lib/utils";
 import {
   HomeIcon,
   MailIcon,
-  UserPlusIcon,
   Users2Icon,
+  UsersIcon,
 } from "lucide-react";
 
 type AdminNavLinksProps = {
-  forcePasswordChange: boolean;
   isAdmin: boolean;
   onNavigate?: () => void;
 };
@@ -21,43 +20,40 @@ const baseLinkClassName =
   "flex items-center gap-2 rounded-none border px-3 py-2 text-xs font-medium transition-colors";
 
 export function AdminNavLinks({
-  forcePasswordChange,
   isAdmin,
   onNavigate,
 }: AdminNavLinksProps) {
   const pathname = usePathname();
-  const items = forcePasswordChange
-    ? []
-    : [
-        {
-          href: "/admin",
-          label: "Dashboard",
-          icon: HomeIcon,
-          active: pathname === "/admin",
-        },
-        {
-          href: "/admin/membership-applications",
-          label: "Membership applications",
-          icon: UserPlusIcon,
-          active: pathname.startsWith("/admin/membership-applications"),
-        },
-        {
-          href: "/admin/newsletters",
-          label: "Newsletters",
-          icon: MailIcon,
-          active: pathname.startsWith("/admin/newsletters"),
-        },
-        ...(isAdmin
-          ? [
-              {
-                href: "/admin/users",
-                label: "Users",
-                icon: Users2Icon,
-                active: pathname.startsWith("/admin/users"),
-              },
-            ]
-          : []),
-      ];
+  const items = [
+    {
+      href: "/admin",
+      label: "Dashboard",
+      icon: HomeIcon,
+      active: pathname === "/admin",
+    },
+    {
+      href: "/admin/members",
+      label: "Members",
+      icon: UsersIcon,
+      active: pathname.startsWith("/admin/members"),
+    },
+    {
+      href: "/admin/newsletters",
+      label: "Newsletters",
+      icon: MailIcon,
+      active: pathname.startsWith("/admin/newsletters"),
+    },
+    ...(isAdmin
+      ? [
+          {
+            href: "/admin/users",
+            label: "Users",
+            icon: Users2Icon,
+            active: pathname.startsWith("/admin/users"),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <nav className="grid gap-2">

@@ -3,7 +3,7 @@ import { count, desc, eq } from "drizzle-orm";
 import { NewslettersManagement } from "@/components/admin/newsletters/newsletters-management";
 import { db } from "@/db";
 import { newsletters, newsletterSubscriptions } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 
 export default async function AdminNewslettersPage({
   searchParams,
@@ -16,8 +16,7 @@ export default async function AdminNewslettersPage({
     (Array.isArray(rawSearchParams.archived)
       ? rawSearchParams.archived[0]
       : rawSearchParams.archived) === "1";
-  const canManage =
-    currentUser?.role === "admin" && !shouldForcePasswordChange(currentUser);
+  const canManage = currentUser?.role === "admin";
 
   const rows = await db
     .select({

@@ -1,19 +1,34 @@
 import { cache } from "react";
 import { forbidden, redirect } from "next/navigation";
+import { z } from "zod";
 
 import { auth } from "@/auth";
 
+const appSessionUserSchema = z
+  .object({
+    forcePasswordChange: z.boolean(),
+    fullName: z.string().min(1),
+    id: z.string().min(1),
+    keycloakUserId: z.string().min(1),
+    role: z.enum(["admin", "viewer"]),
+    username: z.string().min(1),
+  })
+  .passthrough();
+
+export function isAppSessionUser(user: unknown) {
+  return appSessionUserSchema.safeParse(user).success;
+}
+
 export const getCurrentUser = cache(async () => {
   const session = await auth();
+  const user = session?.user;
 
-  return session?.user ?? null;
+  if (!isAppSessionUser(user)) {
+    return null;
+  }
+
+  return user;
 });
-
-export function shouldForcePasswordChange(
-  user: { forcePasswordChange?: boolean } | null | undefined,
-) {
-  return Boolean(user?.forcePasswordChange);
-}
 
 export const requireUser = cache(async () => {
   const user = await getCurrentUser();
@@ -26,13 +41,7 @@ export const requireUser = cache(async () => {
 });
 
 export const requireReadyUser = cache(async () => {
-  const user = await requireUser();
-
-  if (shouldForcePasswordChange(user)) {
-    redirect("/admin/settings");
-  }
-
-  return user;
+  return requireUser();
 });
 
 export const requireAdmin = cache(async () => {

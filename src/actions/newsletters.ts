@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { newsletters, newsletterSubscriptions } from "@/db/schema";
-import { getCurrentUser, shouldForcePasswordChange } from "@/lib/auth/session";
+import { getCurrentUser } from "@/lib/auth/session";
 import {
   createNewsletterSchema,
   type CreateNewsletterInput,
@@ -59,13 +59,6 @@ async function requireNewsletterAdmin() {
     return {
       ok: false as const,
       message: "You are not allowed to manage newsletters.",
-    };
-  }
-
-  if (shouldForcePasswordChange(user)) {
-    return {
-      ok: false as const,
-      message: "Change your password before managing newsletters.",
     };
   }
 
