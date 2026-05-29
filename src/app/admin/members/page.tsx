@@ -1,14 +1,17 @@
+import { count, eq } from "drizzle-orm";
 import Link from "next/link";
 
 import { MembersManagement } from "@/components/admin/members/members-management";
 import { MembersFilterForm } from "@/components/admin/members/members-filter-form";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
-import { roles } from "@/db/schema";
+import { mladiPiratiMembershipApplications, roles } from "@/db/schema";
 import {
   getCurrentUserPermissions,
   requirePermission,
 } from "@/lib/auth/permissions";
+import { formatPendingMembershipApplicationCount } from "@/lib/membership-applications";
 import {
   buildMembersListHref,
   parseMembersFilters,
@@ -24,16 +27,22 @@ export default async function MembersPage({
   await requirePermission("members.read");
   const { permissions } = await getCurrentUserPermissions();
   const filters = parseMembersFilters(await searchParams);
-  const [{ rows, pageCount, totalCount }, roleOptions] = await Promise.all([
-    getMembersPage(filters),
-    db
-      .select({
-        id: roles.id,
-        name: roles.name,
-      })
-      .from(roles)
-      .orderBy(roles.rank),
-  ]);
+  const [{ rows, pageCount, totalCount }, roleOptions, pendingApplications] =
+    await Promise.all([
+      getMembersPage(filters),
+      db
+        .select({
+          id: roles.id,
+          name: roles.name,
+        })
+        .from(roles)
+        .orderBy(roles.rank),
+      db
+        .select({ value: count() })
+        .from(mladiPiratiMembershipApplications)
+        .where(eq(mladiPiratiMembershipApplications.status, "pending")),
+    ]);
+  const pendingApplicationsCount = pendingApplications[0]?.value ?? 0;
   const filtersKey = [
     filters.q,
     filters.roleId,
@@ -53,7 +62,20 @@ export default async function MembersPage({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline">
-            <Link href="/admin/members/applications">Applications</Link>
+            <Link href="/admin/members/applications">
+              Applications
+              {pendingApplicationsCount > 0 ? (
+                <Badge
+                  aria-label={`${pendingApplicationsCount} pending applications`}
+                  className="h-4 min-w-4 px-1 text-[10px] leading-none"
+                  variant="destructive"
+                >
+                  {formatPendingMembershipApplicationCount(
+                    pendingApplicationsCount,
+                  )}
+                </Badge>
+              ) : null}
+            </Link>
           </Button>
         </div>
       </div>

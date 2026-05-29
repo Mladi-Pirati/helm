@@ -145,6 +145,10 @@ export function hasValidRejectionReason(value: string) {
   return getRejectionReasonWordCount(value) >= 4;
 }
 
+export function formatPendingMembershipApplicationCount(count: number) {
+  return count > 99 ? "99+" : count.toString();
+}
+
 export function getMembershipApplicationStatusVariant(
   status: MembershipApplicationStatus,
 ) {
