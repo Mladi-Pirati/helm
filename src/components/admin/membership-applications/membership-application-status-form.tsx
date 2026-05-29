@@ -3,7 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { updateMembershipApplicationStatusAction } from "@/actions/membership-applications";
+import {
+  retryMembershipApplicationMemberCreationAction,
+  updateMembershipApplicationStatusAction,
+} from "@/actions/membership-applications";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,8 +18,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type {
+  MemberCreationStatus,
+  MembershipApplicationStatus,
+} from "@/db/schema";
 import {
   getRejectionReasonWordCount,
   hasValidRejectionReason,
@@ -24,16 +32,23 @@ import {
 
 export function MembershipApplicationStatusForm({
   applicationId,
+  currentMemberCreationStatus,
   currentRejectionReason,
+  currentStatus,
 }: {
   applicationId: string;
+  currentMemberCreationStatus: MemberCreationStatus | null;
   currentRejectionReason: string | null;
+  currentStatus: MembershipApplicationStatus;
 }) {
   const router = useRouter();
   const [isEditingRejectionReason, setIsEditingRejectionReason] =
     useState(false);
   const [savedRejectionReason, setSavedRejectionReason] = useState(
     currentRejectionReason,
+  );
+  const [memberCreationStatus, setMemberCreationStatus] = useState(
+    currentMemberCreationStatus,
   );
   const [rejectionReason, setRejectionReason] = useState(
     currentRejectionReason ?? "",
@@ -76,10 +91,12 @@ export function MembershipApplicationStatusForm({
       setFeedback({
         kind: "success",
         message:
-          values.status === "approved"
+          result.memberCreationMessage ??
+          (values.status === "approved"
             ? "Application approved."
-            : "Application rejected.",
+            : "Application rejected."),
       });
+      setMemberCreationStatus(result.memberCreationStatus);
       if (result.status === "approved") {
         setSavedRejectionReason(null);
         setRejectionReason("");
@@ -93,8 +110,64 @@ export function MembershipApplicationStatusForm({
     });
   };
 
+  const retryMemberCreation = () => {
+    setFeedback(null);
+
+    startTransition(async () => {
+      const result = await retryMembershipApplicationMemberCreationAction(
+        applicationId,
+      );
+
+      if (!result.ok) {
+        setFeedback({
+          kind: "error",
+          message: result.message,
+        });
+        return;
+      }
+
+      setMemberCreationStatus(result.memberCreationStatus);
+      setFeedback({
+        kind: result.memberCreationStatus === "success" ? "success" : "error",
+        message: result.message,
+      });
+      router.refresh();
+    });
+  };
+
   return (
     <div className="grid gap-3 sm:max-w-xl">
+      {currentStatus === "approved" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">Member creation</p>
+          <Badge
+            variant={
+              memberCreationStatus === "success"
+                ? "default"
+                : memberCreationStatus === "fail"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
+            {memberCreationStatus === "success"
+              ? "Success"
+              : memberCreationStatus === "fail"
+                ? "Failed"
+                : "Not attempted"}
+          </Badge>
+          {memberCreationStatus === "fail" ? (
+            <Button
+              disabled={isPending}
+              onClick={retryMemberCreation}
+              size="xs"
+              type="button"
+              variant="outline"
+            >
+              {isPending ? "Retrying..." : "Retry"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>

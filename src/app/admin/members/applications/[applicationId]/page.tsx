@@ -93,6 +93,8 @@ export default async function AdminMembershipApplicationPage({
         mladiPiratiMembershipApplications.acceptsStatuteAndProgram,
       status: mladiPiratiMembershipApplications.status,
       rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
+      memberCreationStatus:
+        mladiPiratiMembershipApplications.memberCreationStatus,
       createdAt: mladiPiratiMembershipApplications.createdAt,
       updatedAt: mladiPiratiMembershipApplications.updatedAt,
     })
@@ -138,8 +140,11 @@ export default async function AdminMembershipApplicationPage({
               application.id,
               application.status,
               application.rejectionReason ?? "",
+              application.memberCreationStatus ?? "",
             ].join(":")}
+            currentMemberCreationStatus={application.memberCreationStatus}
             currentRejectionReason={application.rejectionReason}
+            currentStatus={application.status}
           />
         </CardContent>
       </Card>

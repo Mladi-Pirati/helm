@@ -25,6 +25,13 @@ export const membershipApplicationStatusEnum = pgEnum(
   MEMBERSHIP_APPLICATION_STATUSES,
 );
 
+export const MEMBER_CREATION_STATUSES = ["success", "fail"] as const;
+export type MemberCreationStatus = (typeof MEMBER_CREATION_STATUSES)[number];
+export const memberCreationStatusEnum = pgEnum(
+  "member_creation_status",
+  MEMBER_CREATION_STATUSES,
+);
+
 export const ADDRESS_LABELS = ["primary", "temporary", "work", "other"] as const;
 export type AddressLabel = (typeof ADDRESS_LABELS)[number];
 
@@ -81,6 +88,7 @@ export const mladiPiratiMembershipApplications = pgTable(
       .notNull()
       .default("pending"),
     rejectionReason: text("rejection_reason"),
+    memberCreationStatus: memberCreationStatusEnum("member_creation_status"),
     rawPayload: jsonb("raw_payload")
       .$type<Record<string, unknown>>()
       .notNull()

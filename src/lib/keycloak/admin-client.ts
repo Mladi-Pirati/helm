@@ -24,12 +24,14 @@ const keycloakUserSchema = z
     username: z.string().min(1),
     email: z.string().nullable().optional(),
     enabled: z.boolean().optional(),
+    emailVerified: z.boolean().optional(),
     firstName: z.string().nullable().optional(),
     lastName: z.string().nullable().optional(),
   })
   .transform((user) => ({
     email: user.email ?? null,
     enabled: user.enabled ?? true,
+    emailVerified: user.emailVerified ?? false,
     firstName: user.firstName ?? null,
     fullName: getKeycloakUserDisplayName({
       firstName: user.firstName ?? null,
@@ -48,6 +50,7 @@ const keycloakUserRepresentationSchema = z
     username: z.string().min(1),
     email: z.string().nullable().optional(),
     enabled: z.boolean().optional(),
+    emailVerified: z.boolean().optional(),
     firstName: z.string().nullable().optional(),
     lastName: z.string().nullable().optional(),
   })
@@ -84,6 +87,13 @@ export type KeycloakUserProfileUpdate = {
   lastName: string;
   username: string;
 };
+export type KeycloakUserCreate = {
+  email: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+};
+export type KeycloakRequiredAction = "UPDATE_PASSWORD" | "VERIFY_EMAIL";
 
 export class KeycloakAdminError extends Error {
   constructor(message: string) {
@@ -246,8 +256,53 @@ class KeycloakAdminClient {
     );
   }
 
+  async findUserByEmail(email: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return null;
+
+    return this.findExactUser({
+      email: normalizedEmail,
+    });
+  }
+
+  async findUserByUsername(username: string) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) return null;
+
+    return this.findExactUser({
+      username: trimmedUsername,
+    });
+  }
+
   async getUser(userId: string) {
     return keycloakUserSchema.parse(await this.getUserRepresentation(userId));
+  }
+
+  async createUser(values: KeycloakUserCreate) {
+    const response = await this.post(`${this.config.adminBaseUrl}/users`, {
+      email: values.email,
+      emailVerified: false,
+      enabled: true,
+      firstName: values.firstName,
+      lastName: values.lastName,
+      username: values.username,
+    });
+    const location = getHeaderValue(response.headers, "location");
+    const userId = location ? location.split("/").filter(Boolean).at(-1) : null;
+
+    if (userId) {
+      return this.getUser(userId);
+    }
+
+    const createdUser =
+      (await this.findUserByEmail(values.email)) ??
+      (await this.findUserByUsername(values.username));
+
+    if (!createdUser) {
+      throw new KeycloakAdminError("Created Keycloak user could not be resolved.");
+    }
+
+    return createdUser;
   }
 
   async updateUserProfile(
@@ -264,6 +319,18 @@ class KeycloakAdminClient {
         ...values,
         ...(emailChanged ? { emailVerified: false } : {}),
       },
+    );
+  }
+
+  async sendRequiredActionsEmail(
+    userId: string,
+    actions: KeycloakRequiredAction[],
+  ) {
+    await this.put(
+      `${this.config.adminBaseUrl}/users/${encodeURIComponent(
+        userId,
+      )}/execute-actions-email`,
+      actions,
     );
   }
 
@@ -357,6 +424,24 @@ class KeycloakAdminClient {
     );
   }
 
+  private async findExactUser(params: { email: string } | { username: string }) {
+    const users = keycloakUsersResponseSchema.parse(
+      await this.get(`${this.config.adminBaseUrl}/users`, {
+        briefRepresentation: false,
+        exact: true,
+        first: 0,
+        max: 2,
+        ...params,
+      }),
+    );
+
+    if (users.length > 1) {
+      throw new KeycloakAdminError("Keycloak exact user lookup returned multiple users.");
+    }
+
+    return users[0] ?? null;
+  }
+
   private async get(
     url: string,
     params?: Record<string, boolean | number | string>,
@@ -370,7 +455,7 @@ class KeycloakAdminClient {
   }
 
   private async post(url: string, data: unknown) {
-    await this.http.post(url, data, {
+    return this.http.post(url, data, {
       headers: await this.getAuthorizationHeaders(),
     });
   }
@@ -418,4 +503,25 @@ class KeycloakAdminClient {
 
     return this.accessToken;
   }
+}
+
+function getHeaderValue(
+  headers: Record<string, unknown> | { get?: (name: string) => unknown },
+  name: string,
+) {
+  if ("get" in headers && typeof headers.get === "function") {
+    const value = headers.get(name);
+    return typeof value === "string" ? value : null;
+  }
+
+  const value =
+    (headers as Record<string, unknown>)[name] ??
+    (headers as Record<string, unknown>)[name.toLowerCase()] ??
+    (headers as Record<string, unknown>)[
+      name.replace(/(^|-)([a-z])/g, (_, prefix: string, char: string) =>
+        `${prefix}${char.toUpperCase()}`,
+      )
+    ];
+
+  return typeof value === "string" ? value : null;
 }

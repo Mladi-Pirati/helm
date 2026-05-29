@@ -6,10 +6,12 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import {
+  type MemberCreationStatus,
   type MembershipApplicationStatus,
   mladiPiratiMembershipApplications,
 } from "@/db/schema";
 import { hasPermission } from "@/lib/auth/permissions";
+import { provisionMembershipApplicationMember } from "@/lib/membership-application-provisioning";
 import {
   hasValidRejectionReason,
   reviewMembershipApplicationStatuses,
@@ -26,7 +28,17 @@ type UpdateMembershipApplicationStatusActionResult =
       ok: true;
       status: MembershipApplicationStatus;
       rejectionReason: string | null;
+      memberCreationStatus: MemberCreationStatus | null;
+      memberCreationMessage?: string;
       updatedAt: string;
+    }
+  | MembershipApplicationActionFailure;
+
+type RetryMembershipApplicationMemberCreationActionResult =
+  | {
+      ok: true;
+      memberCreationStatus: MemberCreationStatus;
+      message: string;
     }
   | MembershipApplicationActionFailure;
 
@@ -58,6 +70,10 @@ const deleteMembershipApplicationSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
 });
 
+const retryMembershipApplicationMemberCreationSchema = z.object({
+  applicationId: z.string().trim().min(1, "Application id is required."),
+});
+
 async function requireMembershipApplicationsPermission() {
   const allowed = await hasPermission("members.read");
   if (!allowed) {
@@ -67,6 +83,12 @@ async function requireMembershipApplicationsPermission() {
     };
   }
   return { ok: true as const };
+}
+
+function revalidateMembershipApplicationPaths(applicationId: string) {
+  revalidatePath("/admin/members/applications");
+  revalidatePath(`/admin/members/applications/${applicationId}`);
+  revalidatePath("/admin/members");
 }
 
 export async function updateMembershipApplicationStatusAction(
@@ -108,6 +130,7 @@ export async function updateMembershipApplicationStatusAction(
     | {
         status: MembershipApplicationStatus;
         rejectionReason: string | null;
+        memberCreationStatus: MemberCreationStatus | null;
         updatedAt: Date;
       }
     | undefined;
@@ -118,6 +141,7 @@ export async function updateMembershipApplicationStatusAction(
       .set({
         status: parsedValues.data.status,
         rejectionReason,
+        memberCreationStatus: null,
         updatedAt: new Date(),
       })
       .where(
@@ -129,6 +153,8 @@ export async function updateMembershipApplicationStatusAction(
       .returning({
         status: mladiPiratiMembershipApplications.status,
         rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
+        memberCreationStatus:
+          mladiPiratiMembershipApplications.memberCreationStatus,
         updatedAt: mladiPiratiMembershipApplications.updatedAt,
       });
   } catch {
@@ -145,16 +171,85 @@ export async function updateMembershipApplicationStatusAction(
     };
   }
 
-  revalidatePath("/admin/membership-applications");
-  revalidatePath(
-    `/admin/membership-applications/${parsedValues.data.applicationId}`,
-  );
+  let memberCreationMessage: string | undefined;
+
+  if (updatedApplication.status === "approved") {
+    const memberCreationStatus = await createMemberForApprovedApplication(
+      parsedValues.data.applicationId,
+    );
+    updatedApplication.memberCreationStatus = memberCreationStatus;
+    memberCreationMessage =
+      memberCreationStatus === "success"
+        ? "Member profile created successfully."
+        : "Application approved, but member creation failed. Please retry.";
+  }
+
+  revalidateMembershipApplicationPaths(parsedValues.data.applicationId);
 
   return {
     ok: true,
     status: updatedApplication.status,
     rejectionReason: updatedApplication.rejectionReason,
+    memberCreationStatus: updatedApplication.memberCreationStatus,
+    memberCreationMessage,
     updatedAt: updatedApplication.updatedAt.toISOString(),
+  };
+}
+
+export async function retryMembershipApplicationMemberCreationAction(
+  applicationId: string,
+): Promise<RetryMembershipApplicationMemberCreationActionResult> {
+  const access = await requireMembershipApplicationsPermission();
+
+  if (!access.ok) {
+    return {
+      ok: false,
+      message: access.message,
+    };
+  }
+
+  const parsedValues = retryMembershipApplicationMemberCreationSchema.safeParse({
+    applicationId,
+  });
+
+  if (!parsedValues.success) {
+    return {
+      ok: false,
+      message: "That application could not be found.",
+    };
+  }
+
+  const application = await getApplicationForMemberCreation(
+    parsedValues.data.applicationId,
+  );
+
+  if (!application) {
+    return {
+      ok: false,
+      message: "That application could not be found.",
+    };
+  }
+
+  if (application.status !== "approved") {
+    return {
+      ok: false,
+      message: "Only approved applications can create member profiles.",
+    };
+  }
+
+  const memberCreationStatus = await createMemberForApprovedApplication(
+    parsedValues.data.applicationId,
+  );
+
+  revalidateMembershipApplicationPaths(parsedValues.data.applicationId);
+
+  return {
+    ok: true,
+    memberCreationStatus,
+    message:
+      memberCreationStatus === "success"
+        ? "Member profile created successfully."
+        : "Member creation failed. Please retry after resolving the issue.",
   };
 }
 
@@ -213,13 +308,64 @@ export async function deleteMembershipApplicationAction(
     };
   }
 
-  revalidatePath("/admin/membership-applications");
-  revalidatePath(
-    `/admin/membership-applications/${parsedValues.data.applicationId}`,
-  );
+  revalidateMembershipApplicationPaths(parsedValues.data.applicationId);
 
   return {
     ok: true,
     message: "Application deleted successfully.",
   };
+}
+
+async function createMemberForApprovedApplication(applicationId: string) {
+  const application = await getApplicationForMemberCreation(applicationId);
+
+  if (!application || application.status !== "approved") {
+    return "fail" satisfies MemberCreationStatus;
+  }
+
+  try {
+    await provisionMembershipApplicationMember(application);
+    await setApplicationMemberCreationStatus(applicationId, "success");
+    return "success" satisfies MemberCreationStatus;
+  } catch (error) {
+    console.error("[membership-application-member-creation]", {
+      applicationId,
+      error:
+        error instanceof Error
+          ? { message: error.message, name: error.name }
+          : String(error),
+    });
+    await setApplicationMemberCreationStatus(applicationId, "fail");
+    return "fail" satisfies MemberCreationStatus;
+  }
+}
+
+async function getApplicationForMemberCreation(applicationId: string) {
+  return db.query.mladiPiratiMembershipApplications.findFirst({
+    columns: {
+      cityAndPostalCode: true,
+      discordUsername: true,
+      email: true,
+      firstName: true,
+      id: true,
+      lastName: true,
+      phone: true,
+      status: true,
+      streetAddress: true,
+    },
+    where: eq(mladiPiratiMembershipApplications.id, applicationId),
+  });
+}
+
+async function setApplicationMemberCreationStatus(
+  applicationId: string,
+  memberCreationStatus: MemberCreationStatus,
+) {
+  await db
+    .update(mladiPiratiMembershipApplications)
+    .set({
+      memberCreationStatus,
+      updatedAt: new Date(),
+    })
+    .where(eq(mladiPiratiMembershipApplications.id, applicationId));
 }

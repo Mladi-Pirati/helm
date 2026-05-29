@@ -35,7 +35,7 @@ export default async function AdminLayout({
                 src="/logo.png"
                 width={36}
               />
-              <span>Mladi Pirati - Prijave</span>
+              <span>Mladi Pirati - Helm</span>
             </Link>
           </div>
           <Separator />
@@ -76,7 +76,7 @@ export default async function AdminLayout({
                     src="/logo.png"
                     width={28}
                   />
-                  <span>Mladi Pirati - Prijave</span>
+                  <span>Mladi Pirati - Helm</span>
                 </Link>
               </div>
               <AdminMobileNav

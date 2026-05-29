@@ -91,6 +91,200 @@ describe("getKeycloakAdminConfigFromEnv", () => {
 });
 
 describe("Keycloak admin client", () => {
+  test("creates a Keycloak user and resolves the id from the Location header", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (
+        config.method === "post" &&
+        config.url?.endsWith("/admin/realms/demo/users")
+      ) {
+        return {};
+      }
+
+      if (
+        config.method === "get" &&
+        config.url?.endsWith("/admin/realms/demo/users/user-1")
+      ) {
+        return {
+          email: "ana@example.test",
+          enabled: true,
+          firstName: "Ana",
+          id: "user-1",
+          lastName: "Novak",
+          username: "ana.novak",
+        };
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+    const originalAdapter = adapter;
+    const adapterWithLocation: AxiosAdapter = async (config) => {
+      const response = await originalAdapter(config);
+      if (
+        config.method === "post" &&
+        config.url?.endsWith("/admin/realms/demo/users")
+      ) {
+        return {
+          ...response,
+          headers: {
+            location:
+              "https://sso.example.test/admin/realms/demo/users/user-1",
+          },
+          status: 201,
+          statusText: "Created",
+        };
+      }
+      return response;
+    };
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter: adapterWithLocation },
+    );
+
+    await expect(
+      client.createUser({
+        email: "ana@example.test",
+        firstName: "Ana",
+        lastName: "Novak",
+        username: "ana.novak",
+      }),
+    ).resolves.toMatchObject({
+      email: "ana@example.test",
+      id: "user-1",
+      username: "ana.novak",
+    });
+
+    const createRequest = requests.find(
+      (request) =>
+        request.method === "post" &&
+        request.url?.endsWith("/admin/realms/demo/users"),
+    );
+    expect(JSON.parse(String(createRequest?.data))).toEqual({
+      email: "ana@example.test",
+      emailVerified: false,
+      enabled: true,
+      firstName: "Ana",
+      lastName: "Novak",
+      username: "ana.novak",
+    });
+  });
+
+  test("finds exact users by email and username", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/users")) {
+        if ((config.params as { email?: string }).email) {
+          return [
+            {
+              email: "ana@example.test",
+              firstName: "Ana",
+              id: "user-1",
+              lastName: "Novak",
+              username: "ana.novak",
+            },
+          ];
+        }
+
+        return [];
+      }
+
+      throw new Error(`Unexpected request ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await expect(client.findUserByEmail("Ana@Example.Test")).resolves.toMatchObject({
+      id: "user-1",
+      username: "ana.novak",
+    });
+    await expect(client.findUserByUsername("missing")).resolves.toBeNull();
+
+    expect(
+      requests
+        .filter((request) => request.url?.endsWith("/admin/realms/demo/users"))
+        .map((request) => request.params),
+    ).toEqual([
+      {
+        briefRepresentation: false,
+        email: "ana@example.test",
+        exact: true,
+        first: 0,
+        max: 2,
+      },
+      {
+        briefRepresentation: false,
+        exact: true,
+        first: 0,
+        max: 2,
+        username: "missing",
+      },
+    ]);
+  });
+
+  test("sends required actions email for a Keycloak user", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.method === "put") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.sendRequiredActionsEmail("user-1", [
+      "VERIFY_EMAIL",
+      "UPDATE_PASSWORD",
+    ]);
+
+    const emailRequest = requests.find((request) => request.method === "put");
+    expect(emailRequest?.url).toBe(
+      "https://sso.example.test/admin/realms/demo/users/user-1/execute-actions-email",
+    );
+    expect(JSON.parse(String(emailRequest?.data))).toEqual([
+      "VERIFY_EMAIL",
+      "UPDATE_PASSWORD",
+    ]);
+  });
+
   test("fetches all users across paginated responses", async () => {
     const { adapter, requests } = createAdapter((config) => {
       if (config.url?.endsWith("/protocol/openid-connect/token")) {
@@ -125,6 +319,7 @@ describe("Keycloak admin client", () => {
     await expect(client.listUsers()).resolves.toEqual([
       {
         email: null,
+        emailVerified: false,
         enabled: true,
         firstName: "Ana",
         fullName: "Ana Novak",
@@ -309,6 +504,7 @@ describe("Keycloak admin client", () => {
     await expect(client.searchUsers(" ana@example.test ", 7)).resolves.toEqual([
       {
         email: "ana@example.test",
+        emailVerified: false,
         enabled: true,
         firstName: "Ana",
         fullName: "Ana Novak",
@@ -318,6 +514,7 @@ describe("Keycloak admin client", () => {
       },
       {
         email: "bor@example.test",
+        emailVerified: false,
         enabled: true,
         firstName: "Bor",
         fullName: "Bor Horvat",
