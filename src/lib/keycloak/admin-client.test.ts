@@ -330,12 +330,65 @@ describe("Keycloak admin client", () => {
     expect(JSON.parse(String(updateRequest?.data))).toEqual({
       attributes: { locale: ["sl"] },
       email: "ana@example.test",
-      emailVerified: true,
+      emailVerified: false,
       enabled: true,
       firstName: "Ana",
       id: "user-1",
       lastName: "Novak",
       username: "ana",
     });
+  });
+
+  test("keeps Keycloak email verification when the email value is unchanged", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (
+        config.method === "get" &&
+        config.url?.endsWith("/admin/realms/demo/users/user-1")
+      ) {
+        return {
+          email: "ana@example.test",
+          emailVerified: true,
+          enabled: true,
+          firstName: "Old",
+          id: "user-1",
+          lastName: "Name",
+          username: "old",
+        };
+      }
+
+      if (config.method === "put") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.updateUserProfile("user-1", {
+      email: "ana@example.test",
+      firstName: "Ana",
+      lastName: "Novak",
+      username: "ana",
+    });
+
+    const updateRequest = requests.find(
+      (request) => request.method === "put",
+    );
+    expect(JSON.parse(String(updateRequest?.data)).emailVerified).toBe(true);
   });
 });

@@ -89,9 +89,7 @@ export default async function MemberDetailPage({
 
   const primaryEmail =
     contactRows.find((contact) => contact.type === "email" && contact.isPrimary)
-      ?.value ??
-    contactRows.find((contact) => contact.type === "email")?.value ??
-    "";
+      ?.value ?? "";
 
   return (
     <MemberDetailManagement

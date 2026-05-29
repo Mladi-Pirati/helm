@@ -58,12 +58,59 @@ const roleAssignmentsSchema = z.object({
   assignments: z.array(roleAssignmentSchema),
 });
 
+type MembersSyncLogDetails = Record<
+  string,
+  boolean | number | string | null | undefined
+>;
+
 type DbExecutor = {
   insert: typeof db.insert;
   query: typeof db.query;
   select: typeof db.select;
   update: typeof db.update;
 };
+
+function getErrorLogDetails(error: unknown): MembersSyncLogDetails {
+  if (typeof error !== "object" || error === null) {
+    return { error: String(error) };
+  }
+
+  const details: MembersSyncLogDetails = {};
+  if ("name" in error && typeof error.name === "string") {
+    details.errorName = error.name;
+  }
+  if ("message" in error && typeof error.message === "string") {
+    details.errorMessage = error.message;
+  }
+  if ("code" in error && typeof error.code === "string") {
+    details.errorCode = error.code;
+  }
+  if ("status" in error && typeof error.status === "number") {
+    details.errorStatus = error.status;
+  }
+  if (
+    "response" in error &&
+    typeof error.response === "object" &&
+    error.response !== null &&
+    "status" in error.response &&
+    typeof error.response.status === "number"
+  ) {
+    details.responseStatus = error.response.status;
+  }
+
+  return details;
+}
+
+function logMembersSyncEvent(
+  level: "info" | "warn" | "error",
+  message: string,
+  details: MembersSyncLogDetails = {},
+) {
+  console[level]("[members-sync]", {
+    message,
+    ...details,
+  });
+}
 
 function isUniqueViolation(error: unknown) {
   let currentError: unknown = error;
@@ -147,6 +194,22 @@ async function ensurePrimaryEmail(
     type: "email",
     value: email,
   });
+}
+
+async function syncPrimaryEmailFromKeycloak(
+  memberId: string,
+  email: string | null,
+  tx: DbExecutor = db,
+) {
+  if (email) {
+    await ensurePrimaryEmail(memberId, email, tx);
+    return;
+  }
+
+  await tx
+    .update(contacts)
+    .set({ isPrimary: false })
+    .where(and(eq(contacts.memberId, memberId), eq(contacts.type, "email")));
 }
 
 function revalidateMembers(memberId?: string) {
@@ -315,17 +378,47 @@ export async function updateMemberProfileAction(
 export async function syncMemberFromKeycloakAction(
   memberId: string,
 ): Promise<ActionResult> {
+  logMembersSyncEvent("info", "Starting member sync from Keycloak.", {
+    memberId,
+  });
+
   const access = await requireMembersPermission("members.update");
-  if (!access.ok) return access;
+  if (!access.ok) {
+    logMembersSyncEvent("warn", "Member sync blocked by permissions.", {
+      memberId,
+    });
+    return access;
+  }
 
   const member = await getMemberIdentity(memberId);
-  if (!member) return { ok: false, message: "That member could not be found." };
+  if (!member) {
+    logMembersSyncEvent("warn", "Member sync target was not found.", {
+      memberId,
+    });
+    return { ok: false, message: "That member could not be found." };
+  }
 
   try {
-    const keycloakUser = await createKeycloakAdminClient().getUser(
-      member.keycloakId,
-    );
+    logMembersSyncEvent("info", "Fetching Keycloak user for member sync.", {
+      keycloakId: member.keycloakId,
+      memberId,
+    });
+
+    const keycloakUser = await createKeycloakAdminClient().getUser(member.keycloakId);
+
+    logMembersSyncEvent("info", "Fetched Keycloak user for member sync.", {
+      hasEmail: Boolean(keycloakUser.email),
+      keycloakId: member.keycloakId,
+      memberId,
+      username: keycloakUser.username,
+    });
+
     await db.transaction(async (tx) => {
+      logMembersSyncEvent("info", "Writing synced member data.", {
+        keycloakId: member.keycloakId,
+        memberId,
+      });
+
       await tx
         .update(members)
         .set({
@@ -335,11 +428,19 @@ export async function syncMemberFromKeycloakAction(
         })
         .where(eq(members.id, memberId));
 
-      if (keycloakUser.email) {
-        await ensurePrimaryEmail(memberId, keycloakUser.email, tx);
-      }
+      await syncPrimaryEmailFromKeycloak(memberId, keycloakUser.email, tx);
     });
-  } catch {
+
+    logMembersSyncEvent("info", "Member sync from Keycloak succeeded.", {
+      keycloakId: member.keycloakId,
+      memberId,
+    });
+  } catch (error) {
+    logMembersSyncEvent("error", "Member sync from Keycloak failed.", {
+      keycloakId: member.keycloakId,
+      memberId,
+      ...getErrorLogDetails(error),
+    });
     return { ok: false, message: "Unable to sync from Keycloak right now." };
   }
 

@@ -228,12 +228,14 @@ class KeycloakAdminClient {
     values: KeycloakUserProfileUpdate,
   ) {
     const currentUser = await this.getUserRepresentation(userId);
+    const emailChanged = (currentUser.email ?? null) !== values.email;
 
     await this.put(
       `${this.config.adminBaseUrl}/users/${encodeURIComponent(userId)}`,
       {
         ...currentUser,
         ...values,
+        ...(emailChanged ? { emailVerified: false } : {}),
       },
     );
   }
