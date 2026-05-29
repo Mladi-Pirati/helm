@@ -74,10 +74,6 @@ type PageSizeOption = {
   value: number;
 };
 
-function formatDateTime(value: string) {
-  return formatSlovenianDateTime(new Date(value));
-}
-
 function formatMembership(value: MemberListRow["currentMembership"]) {
   if (!value) return "No active membership";
   if (!value.expiresAt) return "Indefinite";
