@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -46,16 +47,11 @@ export function MembersFilterForm({
   roleOptions: RoleOption[];
 }) {
   const router = useRouter();
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [currentFilters, setCurrentFilters] = React.useState(filters);
-  const [query, setQuery] = React.useState(filters.q);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [currentFilters, setCurrentFilters] = useState(filters);
+  const [query, setQuery] = useState(filters.q);
 
-  React.useEffect(() => {
-    setCurrentFilters(filters);
-    setQuery(filters.q);
-  }, [filters]);
-
-  const applyFilters = React.useCallback(
+  const applyFilters = useCallback(
     (updates: Partial<Pick<MembersListFilters, "q" | "roleId" | "status">>) => {
       const baseFilters = {
         ...currentFilters,
@@ -75,7 +71,7 @@ export function MembersFilterForm({
     [currentFilters, query, router],
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (query === currentFilters.q) return;
 
     debounceRef.current = setTimeout(() => {

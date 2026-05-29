@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { archiveNewsletterAction } from "@/actions/newsletters";
@@ -27,9 +27,9 @@ export function ArchiveNewsletterDialog({
   newsletter,
 }: ArchiveNewsletterDialogProps) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [open, setOpen] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const handleArchive = () => {
     setServerMessage(null);

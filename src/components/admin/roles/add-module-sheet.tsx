@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -31,9 +31,9 @@ const defaultValues: CreateModuleInput = {
 
 export function AddModuleSheet() {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [open, setOpen] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const form = useForm<CreateModuleInput>({
     resolver: zodResolver(createModuleSchema),
     defaultValues,

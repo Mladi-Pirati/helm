@@ -134,7 +134,11 @@ export default async function AdminMembershipApplicationPage({
         <CardContent className="grid gap-4">
           <MembershipApplicationStatusForm
             applicationId={application.id}
-            currentStatus={application.status}
+            key={[
+              application.id,
+              application.status,
+              application.rejectionReason ?? "",
+            ].join(":")}
             currentRejectionReason={application.rejectionReason}
           />
         </CardContent>

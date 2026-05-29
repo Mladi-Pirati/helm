@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState } from "react";
 
 import { logoutAction } from "@/actions/auth";
 import { AdminNavLinks } from "@/components/admin/admin-nav-links";
@@ -27,7 +27,7 @@ export function AdminMobileNav({
   username,
   permissions,
 }: AdminMobileNavProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
     <Sheet onOpenChange={setOpen} open={open}>

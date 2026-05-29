@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { updateMembershipApplicationStatusAction } from "@/actions/membership-applications";
@@ -20,38 +20,29 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   getRejectionReasonWordCount,
   hasValidRejectionReason,
-  type MembershipApplicationStatus,
 } from "@/lib/membership-applications";
 
 export function MembershipApplicationStatusForm({
   applicationId,
-  currentStatus,
   currentRejectionReason,
 }: {
   applicationId: string;
-  currentStatus: MembershipApplicationStatus;
   currentRejectionReason: string | null;
 }) {
   const router = useRouter();
   const [isEditingRejectionReason, setIsEditingRejectionReason] =
-    React.useState(false);
-  const [savedRejectionReason, setSavedRejectionReason] = React.useState(
+    useState(false);
+  const [savedRejectionReason, setSavedRejectionReason] = useState(
     currentRejectionReason,
   );
-  const [rejectionReason, setRejectionReason] = React.useState(
+  const [rejectionReason, setRejectionReason] = useState(
     currentRejectionReason ?? "",
   );
-  const [feedback, setFeedback] = React.useState<{
+  const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
     message: string;
   } | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-
-  React.useEffect(() => {
-    setIsEditingRejectionReason(false);
-    setSavedRejectionReason(currentRejectionReason);
-    setRejectionReason(currentRejectionReason ?? "");
-  }, [currentRejectionReason, currentStatus]);
+  const [isPending, startTransition] = useTransition();
 
   const wordCount = getRejectionReasonWordCount(rejectionReason);
   const canReject = hasValidRejectionReason(rejectionReason);

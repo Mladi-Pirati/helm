@@ -34,6 +34,13 @@ export default async function MembersPage({
       .from(roles)
       .orderBy(roles.rank),
   ]);
+  const filtersKey = [
+    filters.q,
+    filters.roleId,
+    filters.status,
+    filters.page,
+    filters.pageSize,
+  ].join(":");
 
   return (
     <div className="grid gap-6">
@@ -51,7 +58,11 @@ export default async function MembersPage({
         </div>
       </div>
 
-      <MembersFilterForm filters={filters} roleOptions={roleOptions} />
+      <MembersFilterForm
+        filters={filters}
+        key={filtersKey}
+        roleOptions={roleOptions}
+      />
 
       <MembersManagement
         canCreate={permissions.includes("members.create")}

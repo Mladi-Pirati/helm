@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { updateRolePermissionsAction } from "@/actions/roles";
@@ -41,16 +41,12 @@ export function RolePermissionsSheet({
 }: RolePermissionsSheetProps) {
   const router = useRouter();
   const isDesktop = useMediaQuery("(min-width: 768px)");
-  const [open, setOpen] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-  const [selected, setSelected] = React.useState<Set<string>>(
+  const [open, setOpen] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [selected, setSelected] = useState<Set<string>>(
     new Set(assignedPermissionIds),
   );
-
-  React.useEffect(() => {
-    setSelected(new Set(assignedPermissionIds));
-  }, [assignedPermissionIds, open]);
 
   const togglePermission = (permissionId: string) => {
     setSelected((prev) => {
@@ -80,6 +76,14 @@ export function RolePermissionsSheet({
     });
   };
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setSelected(new Set(assignedPermissionIds));
+      setServerMessage(null);
+    }
+  };
+
   const permissionsByModule = permissions.reduce(
     (acc, permission) => {
       if (!acc[permission.moduleName]) {
@@ -92,7 +96,7 @@ export function RolePermissionsSheet({
   );
 
   return (
-    <Sheet onOpenChange={setOpen} open={open}>
+    <Sheet onOpenChange={handleOpenChange} open={open}>
       <SheetTrigger asChild>
         <Button size="xs" type="button" variant="outline">
           Permissions

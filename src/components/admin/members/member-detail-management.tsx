@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
@@ -111,31 +112,15 @@ function ProfileTab({
   member: MemberDetail;
 }) {
   const router = useRouter();
-  const [profileForm, setProfileForm] = React.useState({
+  const [profileForm, setProfileForm] = useState({
     firstName: member.firstName,
     lastName: member.lastName,
     notes: member.notes ?? "",
     primaryEmail: member.primaryEmail,
     username: member.username,
   });
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-
-  React.useEffect(() => {
-    setProfileForm({
-      firstName: member.firstName,
-      lastName: member.lastName,
-      notes: member.notes ?? "",
-      primaryEmail: member.primaryEmail,
-      username: member.username,
-    });
-  }, [
-    member.firstName,
-    member.lastName,
-    member.notes,
-    member.primaryEmail,
-    member.username,
-  ]);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -302,8 +287,8 @@ function SortableContactRow({
     id: contact.id,
     index,
   });
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -411,11 +396,9 @@ function ContactsTab({
   memberId: string;
 }) {
   const router = useRouter();
-  const [contactsState, setContactsState] = React.useState(initialContacts);
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
-
-  React.useEffect(() => setContactsState(initialContacts), [initialContacts]);
+  const [contactsState, setContactsState] = useState(initialContacts);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function add(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -513,8 +496,8 @@ function AddressesTab({
   memberId: string;
 }) {
   const router = useRouter();
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>, addressId?: string) {
     event.preventDefault();
@@ -632,13 +615,13 @@ function MembershipsTab({
   memberships: MembershipRow[];
 }) {
   const router = useRouter();
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = React.useState<{
+  const [message, setMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
     endedAt?: string;
     expiresAt?: string;
     extendedAt?: string;
   }>({});
-  const [isPending, startTransition] = React.useTransition();
+  const [isPending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -787,8 +770,8 @@ function RolesTab({
   roles: RoleOption[];
 }) {
   const router = useRouter();
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -873,6 +856,27 @@ export function MemberDetailManagement({
   roles: RoleOption[];
 }) {
   const fullName = `${member.firstName} ${member.lastName}`.trim();
+  const profileKey = [
+    member.id,
+    member.firstName,
+    member.lastName,
+    member.notes ?? "",
+    member.primaryEmail,
+    member.username,
+  ].join(":");
+  const contactsKey = [
+    member.id,
+    ...contacts.map((contact) =>
+      [
+        contact.id,
+        contact.type,
+        contact.value,
+        contact.label ?? "",
+        contact.isPrimary ? "primary" : "secondary",
+        contact.sortOrder,
+      ].join(":"),
+    ),
+  ].join("|");
 
   return (
     <div className="grid gap-6">
@@ -895,11 +899,12 @@ export function MemberDetailManagement({
         </Button>
       </div>
       
-      <ProfileTab canUpdate={canUpdate} member={member} />
+      <ProfileTab canUpdate={canUpdate} key={profileKey} member={member} />
 
       <ContactsTab
         canUpdate={canUpdate}
         contacts={contacts}
+        key={contactsKey}
         memberId={member.id}
       />
 

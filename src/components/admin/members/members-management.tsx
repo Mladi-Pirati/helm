@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -82,40 +83,49 @@ function formatMembership(value: MemberListRow["currentMembership"]) {
 
 function AddMemberSheet() {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [pickerOpen, setPickerOpen] = React.useState(false);
-  const [query, setQuery] = React.useState("");
+  const [open, setOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [selectedUser, setSelectedUser] =
-    React.useState<KeycloakUserOption | null>(null);
-  const [memberForm, setMemberForm] = React.useState({
+    useState<KeycloakUserOption | null>(null);
+  const [memberForm, setMemberForm] = useState({
     firstName: "",
     lastName: "",
     notes: "",
     primaryEmail: "",
     username: "",
   });
-  const [users, setUsers] = React.useState<KeycloakUserOption[]>([]);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isSearching, startSearchTransition] = React.useTransition();
-  const [isPending, startTransition] = React.useTransition();
+  const [users, setUsers] = useState<KeycloakUserOption[]>([]);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const searchIdRef = useRef(0);
+  const [isSearching, startSearchTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
-  React.useEffect(() => {
-    if (!open || query.trim().length < 2) {
+  function handleSearchChange(nextQuery: string) {
+    setQuery(nextQuery);
+    const searchId = searchIdRef.current + 1;
+    searchIdRef.current = searchId;
+
+    const trimmedQuery = nextQuery.trim();
+    if (trimmedQuery.length < 2) {
       setUsers([]);
       return;
     }
 
     startSearchTransition(async () => {
-      const result = await searchKeycloakUsersAction(query);
+      const result = await searchKeycloakUsersAction(trimmedQuery);
+      if (searchIdRef.current !== searchId) return;
+
       if (result.ok) {
         setUsers(result.users);
       } else {
         setServerMessage(result.message);
       }
     });
-  }, [open, query]);
+  }
 
   function reset() {
+    searchIdRef.current += 1;
     setQuery("");
     setSelectedUser(null);
     setMemberForm({
@@ -203,7 +213,7 @@ function AddMemberSheet() {
                 <Input
                   autoComplete="off"
                   id="keycloak-search"
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => handleSearchChange(event.target.value)}
                   placeholder="Search by name, username, or email"
                   value={query}
                 />
@@ -365,7 +375,7 @@ export function MembersManagement({
   totalCount: number;
 }) {
   const router = useRouter();
-  const parentRef = React.useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
