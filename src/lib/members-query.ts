@@ -84,14 +84,6 @@ export async function getMembersPage(filters: MembersListFilters) {
       id: members.id,
       keycloakId: members.keycloakId,
       lastName: members.lastName,
-      primaryEmail: sql<string | null>`(
-        select ${contacts.value}
-        from ${contacts}
-        where ${contacts.memberId} = ${members.id}
-        and ${contacts.type} = 'email'
-        order by ${contacts.isPrimary} desc, ${contacts.sortOrder} asc
-        limit 1
-      )`,
       updatedAt: members.updatedAt,
       username: members.username,
     })
@@ -103,6 +95,18 @@ export async function getMembersPage(filters: MembersListFilters) {
     .offset(offset);
 
   const memberIds = rows.map((row) => row.id);
+  const contactRows = memberIds.length
+    ? await db
+        .select({
+          isPrimary: contacts.isPrimary,
+          memberId: contacts.memberId,
+          sortOrder: contacts.sortOrder,
+          value: contacts.value,
+        })
+        .from(contacts)
+        .where(and(inArray(contacts.memberId, memberIds), eq(contacts.type, "email")))
+        .orderBy(desc(contacts.isPrimary), asc(contacts.sortOrder))
+    : [];
   const roleRows = memberIds.length
     ? await db
         .select({
@@ -138,6 +142,7 @@ export async function getMembersPage(filters: MembersListFilters) {
     pageCount: Math.max(1, Math.ceil(Number(totalCount) / filters.pageSize)),
     rows: rows.map((row) => ({
       ...row,
+      primaryEmail: getPrimaryEmailForMember(row.id, contactRows),
       currentMembership: (() => {
         const currentMembership = membershipRows.find(
           (membership) =>
@@ -165,6 +170,28 @@ export async function getMembersPage(filters: MembersListFilters) {
   };
 }
 
+export function getPrimaryEmailForMember(
+  memberId: string,
+  contactRows: {
+    isPrimary: boolean;
+    memberId: string;
+    sortOrder: number;
+    value: string;
+  }[],
+) {
+  return (
+    contactRows
+      .filter((contact) => contact.memberId === memberId)
+      .sort((left, right) => {
+        if (left.isPrimary !== right.isPrimary) {
+          return left.isPrimary ? -1 : 1;
+        }
+
+        return left.sortOrder - right.sortOrder;
+      })[0]?.value ?? null
+  );
+}
+
 export async function roleGrantsAnyPermission(
   roleIds: string[],
   permissionKeys: string[],
@@ -180,6 +207,21 @@ export async function roleGrantsAnyPermission(
       and(
         inArray(roles.id, roleIds),
         inArray(permissions.key, permissionKeys),
+      ),
+    )
+    .limit(1);
+
+  return rows.length > 0;
+}
+
+export async function memberHasActiveRole(memberId: string, now = new Date()) {
+  const rows = await db
+    .select({ id: memberRoles.roleId })
+    .from(memberRoles)
+    .where(
+      and(
+        eq(memberRoles.memberId, memberId),
+        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
       ),
     )
     .limit(1);

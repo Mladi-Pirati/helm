@@ -39,6 +39,7 @@ Copy `.env.example` to `.env` and provide:
 - `KEYCLOAK_CLIENT_ID`
 - `KEYCLOAK_CLIENT_SECRET`
 - `KEYCLOAK_ISSUER`
+- `KEYCLOAK_ADMIN`
 - `LEGALIZIRAJMO_TURNSTILE_SECRET_KEY`
 
 Optional:
@@ -52,6 +53,7 @@ Optional:
 
 - Auth.js v5 is configured with Keycloak OIDC.
 - `AUTH_URL` must match the public admin origin exactly. Keycloak must allow `${AUTH_URL}/api/auth/callback/keycloak` as a valid redirect URI.
+- `KEYCLOAK_ISSUER` is used for OIDC token/auth flows. `KEYCLOAK_ADMIN` is used for Keycloak Admin REST API calls.
 - User records live in PostgreSQL for local app authorization and are linked to Keycloak users.
 - The first eligible Keycloak login creates the first local admin user.
 - Sessions use the JWT strategy and expose `id`, `fullName`, `username`, and `role`.

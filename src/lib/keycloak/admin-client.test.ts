@@ -61,6 +61,33 @@ describe("getKeycloakAdminConfigFromEnv", () => {
       defaultClientRoleName: "user",
     });
   });
+
+  test("preserves an issuer context path when deriving the admin base URL", () => {
+    const config = getKeycloakAdminConfigFromEnv({
+      KEYCLOAK_CLIENT_ID: "applications",
+      KEYCLOAK_CLIENT_SECRET: "secret",
+      KEYCLOAK_ISSUER: "https://sso.example.test/auth/realms/mladi-pirati/",
+    });
+
+    expect(config.adminBaseUrl).toBe(
+      "https://sso.example.test/auth/admin/realms/mladi-pirati",
+    );
+  });
+
+  test("uses KEYCLOAK_ADMIN for admin API calls when configured", () => {
+    const config = getKeycloakAdminConfigFromEnv({
+      KEYCLOAK_ADMIN: "https://sso.example.test/admin/realms/mladi-pirati/",
+      KEYCLOAK_CLIENT_ID: "applications",
+      KEYCLOAK_CLIENT_SECRET: "secret",
+      KEYCLOAK_ISSUER: "https://sso.example.test/auth/realms/mladi-pirati/",
+    });
+
+    expect(config).toMatchObject({
+      adminBaseUrl: "https://sso.example.test/admin/realms/mladi-pirati",
+      issuer: "https://sso.example.test/auth/realms/mladi-pirati",
+      realm: "mladi-pirati",
+    });
+  });
 });
 
 describe("Keycloak admin client", () => {
@@ -169,6 +196,59 @@ describe("Keycloak admin client", () => {
     ]);
   });
 
+  test("removes all mapped client roles when revoking access", async () => {
+    const mappedRoles = [
+      { id: "role-id", name: "user" },
+      { id: "legacy-role-id", name: "legacy" },
+    ];
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/clients")) {
+        return [{ id: "client-uuid", clientId: "applications" }];
+      }
+
+      if (
+        config.method === "get" &&
+        config.url?.endsWith("/role-mappings/clients/client-uuid")
+      ) {
+        return mappedRoles;
+      }
+
+      if (config.method === "delete") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.removeAllClientRoles("user-1");
+
+    const revokeRequest = requests.find(
+      (request) =>
+        request.method === "delete" &&
+        request.url?.includes("/role-mappings/clients/"),
+    );
+    expect(revokeRequest?.url).toBe(
+      "https://sso.example.test/admin/realms/demo/users/user-1/role-mappings/clients/client-uuid",
+    );
+    expect(JSON.parse(String(revokeRequest?.data))).toEqual(mappedRoles);
+  });
+
   test("searches users with full representations and deduplicates search, username, and email matches", async () => {
     const { adapter, requests } = createAdapter((config) => {
       if (config.url?.endsWith("/protocol/openid-connect/token")) {
@@ -260,6 +340,7 @@ describe("Keycloak admin client", () => {
       },
       {
         briefRepresentation: false,
+        exact: true,
         first: 0,
         max: 7,
         username: "ana@example.test",
@@ -267,6 +348,7 @@ describe("Keycloak admin client", () => {
       {
         briefRepresentation: false,
         email: "ana@example.test",
+        exact: true,
         first: 0,
         max: 7,
       },

@@ -37,10 +37,7 @@ export function parseMembersFilters(
   const rawPage = firstParam(params.page);
   const rawPageSize = firstParam(params.pageSize);
   const rawStatus = firstParam(params.status);
-  const pageSize = parsePositiveInt(
-    rawPageSize,
-    DEFAULT_MEMBERS_PAGE_SIZE,
-  );
+  const pageSize = parsePositiveInt(rawPageSize, DEFAULT_MEMBERS_PAGE_SIZE);
 
   return {
     page: parsePositiveInt(rawPage, 1),
@@ -70,4 +67,15 @@ export function buildMembersQueryString(filters: MembersListFilters) {
 export function buildMembersListHref(filters: MembersListFilters) {
   const queryString = buildMembersQueryString(filters);
   return queryString ? `/admin/members?${queryString}` : "/admin/members";
+}
+
+export function buildMembersFilterHref(
+  filters: MembersListFilters,
+  updates: Partial<Pick<MembersListFilters, "q" | "roleId" | "status">>,
+) {
+  return buildMembersListHref({
+    ...filters,
+    ...updates,
+    page: 1,
+  });
 }

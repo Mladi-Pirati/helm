@@ -10,6 +10,8 @@ const keycloakAdminEnvSchema = z.object({
   KEYCLOAK_CLIENT_ID: z.string().trim().min(1),
   KEYCLOAK_CLIENT_SECRET: z.string().trim().min(1),
   KEYCLOAK_ISSUER: z.string().trim().url(),
+  KEYCLOAK_ADMIN: z.string().trim().url().optional(),
+  KEYCLOAK_REALM: z.string().trim().min(1).optional(),
 });
 
 const tokenResponseSchema = z.object({
@@ -110,22 +112,30 @@ export function getKeycloakAdminConfigFromEnv(
   const realmMarker = "/realms/";
   const realmMarkerIndex = issuerUrl.pathname.indexOf(realmMarker);
 
-  if (realmMarkerIndex === -1) {
+  if (realmMarkerIndex === -1 && !parsed.KEYCLOAK_REALM) {
     throw new KeycloakAdminError(
       "KEYCLOAK_ISSUER must include the realm path, for example https://host/realms/realm.",
     );
   }
 
-  const realm = decodeURIComponent(
-    issuerUrl.pathname.slice(realmMarkerIndex + realmMarker.length),
-  );
+  const realm =
+    parsed.KEYCLOAK_REALM ??
+    decodeURIComponent(
+      issuerUrl.pathname.slice(realmMarkerIndex + realmMarker.length),
+    );
 
   if (!realm) {
     throw new KeycloakAdminError("KEYCLOAK_ISSUER must include a realm name.");
   }
 
+  const issuerPrefix =
+    realmMarkerIndex === -1 ? "" : issuerUrl.pathname.slice(0, realmMarkerIndex);
+  const adminBaseUrl =
+    parsed.KEYCLOAK_ADMIN?.replace(/\/+$/, "") ??
+    `${issuerUrl.origin}${issuerPrefix}/admin/realms/${encodeRealmPathPart(realm)}`;
+
   return {
-    adminBaseUrl: `${issuerUrl.origin}/admin/realms/${encodeRealmPathPart(realm)}`,
+    adminBaseUrl,
     clientId: parsed.KEYCLOAK_CLIENT_ID,
     clientSecret: parsed.KEYCLOAK_CLIENT_SECRET,
     defaultClientRoleName:
@@ -201,10 +211,12 @@ class KeycloakAdminClient {
       }),
       this.get(`${this.config.adminBaseUrl}/users`, {
         ...baseParams,
+        exact: true,
         username: trimmedQuery,
       }),
       this.get(`${this.config.adminBaseUrl}/users`, {
         ...baseParams,
+        exact: true,
         email: trimmedQuery,
       }),
     ]);
@@ -217,6 +229,21 @@ class KeycloakAdminClient {
     }
 
     return Array.from(usersById.values()).slice(0, max);
+  }
+
+  async searchUsersByUsername(username: string, max = 10) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) return [];
+
+    return keycloakUsersResponseSchema.parse(
+      await this.get(`${this.config.adminBaseUrl}/users`, {
+        briefRepresentation: false,
+        exact: true,
+        first: 0,
+        max,
+        username: trimmedUsername,
+      }),
+    );
   }
 
   async getUser(userId: string) {

@@ -17,7 +17,10 @@ import {
 import { getCurrentUser } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { createKeycloakAdminClient } from "@/lib/keycloak/admin-client";
-import { roleGrantsAnyPermission } from "@/lib/members-query";
+import {
+  memberHasActiveRole,
+  roleGrantsAnyPermission,
+} from "@/lib/members-query";
 import {
   addressInputSchema,
   contactInputSchema,
@@ -97,8 +100,66 @@ function getErrorLogDetails(error: unknown): MembersSyncLogDetails {
   ) {
     details.responseStatus = error.response.status;
   }
+  if (
+    "config" in error &&
+    typeof error.config === "object" &&
+    error.config !== null
+  ) {
+    if ("method" in error.config && typeof error.config.method === "string") {
+      details.requestMethod = error.config.method.toUpperCase();
+    }
+    if ("url" in error.config && typeof error.config.url === "string") {
+      details.requestPath = getLoggableUrlPath(error.config.url);
+    }
+  }
+  if (
+    "response" in error &&
+    typeof error.response === "object" &&
+    error.response !== null &&
+    "data" in error.response
+  ) {
+    details.responseBody = getLoggableResponseBody(error.response.data);
+  }
 
   return details;
+}
+
+function getLoggableUrlPath(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return value;
+  }
+}
+
+function getLoggableResponseBody(value: unknown) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value.slice(0, 500);
+
+  try {
+    return JSON.stringify(value).slice(0, 500);
+  } catch {
+    return String(value).slice(0, 500);
+  }
+}
+
+function getErrorResponseStatus(error: unknown) {
+  if (typeof error !== "object" || error === null) return null;
+  if ("status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+  if (
+    "response" in error &&
+    typeof error.response === "object" &&
+    error.response !== null &&
+    "status" in error.response &&
+    typeof error.response.status === "number"
+  ) {
+    return error.response.status;
+  }
+
+  return null;
 }
 
 function logMembersSyncEvent(
@@ -157,6 +218,98 @@ async function getMemberIdentity(memberId: string) {
     },
     where: eq(members.id, memberId),
   });
+}
+
+async function getKeycloakUserForMemberSync(member: {
+  id: string;
+  keycloakId: string;
+  username: string;
+}) {
+  const keycloak = createKeycloakAdminClient();
+
+  try {
+    logMembersSyncEvent("info", "Fetching Keycloak user by stored id.", {
+      keycloakId: member.keycloakId,
+      memberId: member.id,
+    });
+
+    return {
+      keycloakUser: await keycloak.getUser(member.keycloakId),
+      resolvedKeycloakId: member.keycloakId,
+    };
+  } catch (error) {
+    if (getErrorResponseStatus(error) !== 404) throw error;
+
+    logMembersSyncEvent("warn", "Stored Keycloak id was not found.", {
+      keycloakId: member.keycloakId,
+      memberId: member.id,
+      username: member.username,
+    });
+  }
+
+  logMembersSyncEvent("info", "Searching Keycloak user by local username.", {
+    memberId: member.id,
+    username: member.username,
+  });
+
+  const users = await keycloak.searchUsersByUsername(member.username);
+  const matchingUsers = users.filter((user) => user.username === member.username);
+
+  if (matchingUsers.length !== 1) {
+    logMembersSyncEvent("error", "Keycloak username fallback did not resolve exactly one user.", {
+      matchCount: matchingUsers.length,
+      memberId: member.id,
+      username: member.username,
+    });
+    throw new Error(
+      `Keycloak user not found by id and username fallback matched ${matchingUsers.length} users.`,
+    );
+  }
+
+  const [keycloakUser] = matchingUsers;
+  await db
+    .update(members)
+    .set({ keycloakId: keycloakUser.id })
+    .where(eq(members.id, member.id));
+
+  logMembersSyncEvent("info", "Relinked member to Keycloak user found by username.", {
+    keycloakId: keycloakUser.id,
+    memberId: member.id,
+    previousKeycloakId: member.keycloakId,
+    username: member.username,
+  });
+
+  return {
+    keycloakUser,
+    resolvedKeycloakId: keycloakUser.id,
+  };
+}
+
+function roleAssignmentsIncludeActiveRole(
+  assignments: RoleAssignmentInput[],
+  now = new Date(),
+) {
+  return assignments.some((assignment) => {
+    if (!assignment.expiresAt) return true;
+
+    const expiresAt = new Date(assignment.expiresAt);
+    return !Number.isNaN(expiresAt.getTime()) && expiresAt >= now;
+  });
+}
+
+async function syncKeycloakClientAccess(values: {
+  disabled: boolean;
+  hasActiveRole: boolean;
+  keycloakId: string;
+}) {
+  const keycloak = createKeycloakAdminClient();
+
+  if (values.disabled || !values.hasActiveRole) {
+    await keycloak.removeAllClientRoles(values.keycloakId);
+    return;
+  }
+
+  await keycloak.ensureDefaultClientRole(values.keycloakId);
 }
 
 async function ensurePrimaryEmail(
@@ -399,23 +552,19 @@ export async function syncMemberFromKeycloakAction(
   }
 
   try {
-    logMembersSyncEvent("info", "Fetching Keycloak user for member sync.", {
-      keycloakId: member.keycloakId,
-      memberId,
-    });
-
-    const keycloakUser = await createKeycloakAdminClient().getUser(member.keycloakId);
+    const { keycloakUser, resolvedKeycloakId } =
+      await getKeycloakUserForMemberSync(member);
 
     logMembersSyncEvent("info", "Fetched Keycloak user for member sync.", {
       hasEmail: Boolean(keycloakUser.email),
-      keycloakId: member.keycloakId,
+      keycloakId: resolvedKeycloakId,
       memberId,
       username: keycloakUser.username,
     });
 
     await db.transaction(async (tx) => {
       logMembersSyncEvent("info", "Writing synced member data.", {
-        keycloakId: member.keycloakId,
+        keycloakId: resolvedKeycloakId,
         memberId,
       });
 
@@ -423,6 +572,7 @@ export async function syncMemberFromKeycloakAction(
         .update(members)
         .set({
           firstName: keycloakUser.firstName ?? "",
+          keycloakId: resolvedKeycloakId,
           lastName: keycloakUser.lastName ?? "",
           username: keycloakUser.username,
         })
@@ -432,7 +582,7 @@ export async function syncMemberFromKeycloakAction(
     });
 
     logMembersSyncEvent("info", "Member sync from Keycloak succeeded.", {
-      keycloakId: member.keycloakId,
+      keycloakId: resolvedKeycloakId,
       memberId,
     });
   } catch (error) {
@@ -464,12 +614,11 @@ export async function setMemberDisabledAction(
   if (!member) return { ok: false, message: "That member could not be found." };
 
   try {
-    const keycloak = createKeycloakAdminClient();
-    if (disabled) {
-      await keycloak.removeAllClientRoles(member.keycloakId);
-    } else {
-      await keycloak.ensureDefaultClientRole(member.keycloakId);
-    }
+    await syncKeycloakClientAccess({
+      disabled,
+      hasActiveRole: disabled ? false : await memberHasActiveRole(memberId),
+      keycloakId: member.keycloakId,
+    });
   } catch {
     return {
       ok: false,
@@ -774,22 +923,45 @@ export async function updateMemberRolesAction(
     }
   }
 
-  await db.transaction(async (tx) => {
-    await tx.delete(memberRoles).where(eq(memberRoles.memberId, memberId));
-    if (parsed.data.assignments.length === 0) return;
+  const now = new Date();
+  const hasActiveRole =
+    !member.disabledAt &&
+    roleAssignmentsIncludeActiveRole(parsed.data.assignments, now);
 
-    await tx.insert(memberRoles).values(
-      parsed.data.assignments.map((assignment) => ({
-        expiresAt: assignment.expiresAt
-          ? new Date(assignment.expiresAt)
-          : null,
-        grantedAt: new Date(),
-        grantedBy: currentMemberId,
-        memberId,
-        roleId: assignment.roleId,
-      })),
-    );
-  });
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(memberRoles).where(eq(memberRoles.memberId, memberId));
+      if (parsed.data.assignments.length) {
+        await tx.insert(memberRoles).values(
+          parsed.data.assignments.map((assignment) => ({
+            expiresAt: assignment.expiresAt
+              ? new Date(assignment.expiresAt)
+              : null,
+            grantedAt: now,
+            grantedBy: currentMemberId,
+            memberId,
+            roleId: assignment.roleId,
+          })),
+        );
+      }
+
+      await syncKeycloakClientAccess({
+        disabled: Boolean(member.disabledAt),
+        hasActiveRole,
+        keycloakId: member.keycloakId,
+      });
+    });
+  } catch (error) {
+    logMembersSyncEvent("error", "Keycloak access sync after role update failed.", {
+      keycloakId: member.keycloakId,
+      memberId,
+      ...getErrorLogDetails(error),
+    });
+    return {
+      ok: false,
+      message: "Keycloak access could not be updated. Member roles were not changed.",
+    };
+  }
 
   revalidateMembers(memberId);
   return { ok: true, message: "Member roles updated successfully." };

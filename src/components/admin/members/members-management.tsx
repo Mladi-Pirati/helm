@@ -69,6 +69,11 @@ export type KeycloakUserOption = {
   username: string;
 };
 
+type PageSizeOption = {
+  href: string;
+  value: number;
+};
+
 function formatDateTime(value: string) {
   return formatSlovenianDateTime(new Date(value));
 }
@@ -344,17 +349,26 @@ function AddMemberSheet() {
 
 export function MembersManagement({
   canCreate,
+  nextPageHref,
   page,
   pageCount,
+  pageSize,
+  pageSizeOptions,
+  previousPageHref,
   rows,
   totalCount,
 }: {
   canCreate: boolean;
+  nextPageHref: string;
   page: number;
   pageCount: number;
+  pageSize: number;
+  pageSizeOptions: PageSizeOption[];
+  previousPageHref: string;
   rows: MemberListRow[];
   totalCount: number;
 }) {
+  const router = useRouter();
   const parentRef = React.useRef<HTMLDivElement>(null);
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
@@ -457,13 +471,42 @@ export function MembersManagement({
                 })}
               </div>
             </div>
-            <div className="flex items-center justify-between border-t p-4 text-xs">
+            <div className="flex flex-col gap-3 border-t p-4 text-xs md:flex-row md:items-center md:justify-between">
               <span className="text-muted-foreground">
                 Page {page} of {pageCount}
               </span>
-              <span className="text-muted-foreground">
-                Updated {rows[0] ? formatDateTime(rows[0].updatedAt) : ""}
-              </span>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <span className="text-muted-foreground">
+                  Updated {rows[0] ? formatDateTime(rows[0].updatedAt) : ""}
+                </span>
+                <label className="flex items-center gap-2 text-muted-foreground">
+                  <span>Per page</span>
+                  <select
+                    className="h-8 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+                    onChange={(event) => {
+                      const option = pageSizeOptions.find(
+                        ({ value }) => value === Number(event.target.value),
+                      );
+                      if (option) router.push(option.href);
+                    }}
+                    value={String(pageSize)}
+                  >
+                    {pageSizeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.value}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex gap-2">
+                  <Button asChild variant="outline">
+                    <Link href={previousPageHref}>Previous</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href={nextPageHref}>Next</Link>
+                  </Button>
+                </div>
+              </div>
             </div>
           </>
         ) : (

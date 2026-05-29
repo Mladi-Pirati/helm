@@ -38,12 +38,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ADDRESS_LABELS, CONTACT_TYPES, type AddressLabel, type ContactType } from "@/db/schema";
 import { formatSlovenianDateTime } from "@/lib/date-format";
@@ -180,7 +174,7 @@ function ProfileTab({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Overview</CardTitle>
+        <CardTitle className="font-bold">Overview</CardTitle>
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 p-4" onSubmit={submit}>
@@ -445,7 +439,7 @@ function ContactsTab({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Contacts</CardTitle>
+        <CardTitle className="font-bold">Contacts</CardTitle>
       </CardHeader>
       <CardContent className="px-0">
         <DragDropProvider
@@ -557,7 +551,7 @@ function AddressesTab({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Addresses</CardTitle>
+        <CardTitle className="font-bold">Addresses</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 p-4">
         {rows.map((address) => (
@@ -693,7 +687,7 @@ function MembershipsTab({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Memberships</CardTitle>
+        <CardTitle className="font-bold">Memberships</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 p-4">
         <div className="divide-y border">
@@ -816,7 +810,7 @@ function RolesTab({
   return (
     <Card>
       <CardHeader className="border-b">
-        <CardTitle>Roles</CardTitle>
+        <CardTitle className="font-bold">Roles</CardTitle>
       </CardHeader>
       <CardContent>
         <form className="grid gap-3 p-4" onSubmit={submit}>
@@ -900,7 +894,35 @@ export function MemberDetailManagement({
           <Link href="/admin/members">Back to members</Link>
         </Button>
       </div>
-      <Tabs defaultValue="overview">
+      
+      <ProfileTab canUpdate={canUpdate} member={member} />
+
+      <ContactsTab
+        canUpdate={canUpdate}
+        contacts={contacts}
+        memberId={member.id}
+      />
+
+      <AddressesTab
+        addresses={addresses}
+        canUpdate={canUpdate}
+        memberId={member.id}
+      />
+
+      <MembershipsTab
+        canUpdate={canUpdate}
+        memberId={member.id}
+        memberships={memberships}
+      />
+
+      <RolesTab
+        assignedRoles={assignedRoles}
+        canManageRoles={canManageRoles}
+        memberId={member.id}
+        roles={roles}
+      />
+
+      {/* <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="contacts">Contacts</TabsTrigger>
@@ -940,7 +962,7 @@ export function MemberDetailManagement({
             roles={roles}
           />
         </TabsContent>
-      </Tabs>
+      </Tabs> */}
     </div>
   );
 }
