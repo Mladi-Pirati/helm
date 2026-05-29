@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_MEMBERS_PAGE_SIZE,
   MAX_MEMBERS_PAGE_SIZE,
+  NO_ROLES_MEMBER_ROLE_FILTER,
   buildMembersFilterHref,
   buildMembersQueryString,
   parseMembersFilters,
@@ -76,5 +77,17 @@ describe("member list filters", () => {
         },
       ),
     ).toBe("/admin/members?pageSize=25");
+  });
+
+  test("preserves the no-roles role filter in member list links", () => {
+    expect(
+      buildMembersQueryString({
+        page: 1,
+        pageSize: DEFAULT_MEMBERS_PAGE_SIZE,
+        q: "",
+        roleId: NO_ROLES_MEMBER_ROLE_FILTER,
+        status: "active",
+      }),
+    ).toBe(`roleId=${NO_ROLES_MEMBER_ROLE_FILTER}`);
   });
 });

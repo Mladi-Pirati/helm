@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  NO_ROLES_MEMBER_ROLE_FILTER,
   buildMembersFilterHref,
   type MemberListStatus,
   type MembersListFilters,
@@ -128,6 +129,7 @@ export function MembersFilterForm({
         value={currentFilters.roleId}
       >
         <option value="">All roles</option>
+        <option value={NO_ROLES_MEMBER_ROLE_FILTER}>No roles</option>
         {roleOptions.map((role) => (
           <option key={role.id} value={role.id}>
             {role.name}

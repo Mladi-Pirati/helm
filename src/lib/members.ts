@@ -1,5 +1,6 @@
 export const DEFAULT_MEMBERS_PAGE_SIZE = 50;
 export const MAX_MEMBERS_PAGE_SIZE = 100;
+export const NO_ROLES_MEMBER_ROLE_FILTER = "__none";
 
 export const memberListStatuses = ["active", "disabled", "all"] as const;
 export type MemberListStatus = (typeof memberListStatuses)[number];

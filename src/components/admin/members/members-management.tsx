@@ -476,9 +476,6 @@ export function MembersManagement({
                 Page {page} of {pageCount}
               </span>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <span className="text-muted-foreground">
-                  Updated {rows[0] ? formatDateTime(rows[0].updatedAt) : ""}
-                </span>
                 <label className="flex items-center gap-2 text-muted-foreground">
                   <span>Per page</span>
                   <select

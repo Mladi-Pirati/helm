@@ -4,10 +4,12 @@ import {
   count,
   desc,
   eq,
+  exists,
   gte,
   inArray,
   isNotNull,
   isNull,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
@@ -23,8 +25,12 @@ import {
   permissions,
 } from "@/db/schema";
 import type { MembersListFilters } from "@/lib/members";
+import { NO_ROLES_MEMBER_ROLE_FILTER } from "@/lib/members";
 
-export function buildMembersWhere(filters: MembersListFilters, now = new Date()) {
+export function buildMembersWhere(
+  filters: MembersListFilters,
+  now = new Date(),
+) {
   const whereClauses = [];
 
   if (filters.status === "active") {
@@ -51,14 +57,40 @@ export function buildMembersWhere(filters: MembersListFilters, now = new Date())
     );
   }
 
-  if (filters.roleId) {
+  if (filters.roleId === NO_ROLES_MEMBER_ROLE_FILTER) {
     whereClauses.push(
-      sql`exists (
-        select 1 from ${memberRoles}
-        where ${memberRoles.memberId} = ${members.id}
-        and ${memberRoles.roleId} = ${filters.roleId}
-        and (${memberRoles.expiresAt} is null or ${memberRoles.expiresAt} >= ${now})
-      )`,
+      notExists(
+        db
+          .select({ value: sql`1` })
+          .from(memberRoles)
+          .where(
+            and(
+              eq(memberRoles.memberId, members.id),
+              or(
+                isNull(memberRoles.expiresAt),
+                gte(memberRoles.expiresAt, now),
+              ),
+            ),
+          ),
+      ),
+    );
+  } else if (filters.roleId) {
+    whereClauses.push(
+      exists(
+        db
+          .select({ value: sql`1` })
+          .from(memberRoles)
+          .where(
+            and(
+              eq(memberRoles.memberId, members.id),
+              eq(memberRoles.roleId, filters.roleId),
+              or(
+                isNull(memberRoles.expiresAt),
+                gte(memberRoles.expiresAt, now),
+              ),
+            ),
+          ),
+      ),
     );
   }
 
@@ -90,7 +122,11 @@ export async function getMembersPage(filters: MembersListFilters) {
     .from(members);
 
   const rows = await (where ? baseRowsQuery.where(where) : baseRowsQuery)
-    .orderBy(desc(members.updatedAt), asc(members.lastName), asc(members.firstName))
+    .orderBy(
+      desc(members.updatedAt),
+      asc(members.lastName),
+      asc(members.firstName),
+    )
     .limit(filters.pageSize)
     .offset(offset);
 
@@ -104,7 +140,12 @@ export async function getMembersPage(filters: MembersListFilters) {
           value: contacts.value,
         })
         .from(contacts)
-        .where(and(inArray(contacts.memberId, memberIds), eq(contacts.type, "email")))
+        .where(
+          and(
+            inArray(contacts.memberId, memberIds),
+            eq(contacts.type, "email"),
+          ),
+        )
         .orderBy(desc(contacts.isPrimary), asc(contacts.sortOrder))
     : [];
   const roleRows = memberIds.length
@@ -204,10 +245,7 @@ export async function roleGrantsAnyPermission(
     .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
     .where(
-      and(
-        inArray(roles.id, roleIds),
-        inArray(permissions.key, permissionKeys),
-      ),
+      and(inArray(roles.id, roleIds), inArray(permissions.key, permissionKeys)),
     )
     .limit(1);
 
