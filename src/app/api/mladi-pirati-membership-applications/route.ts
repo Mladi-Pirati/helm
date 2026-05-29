@@ -94,6 +94,10 @@ function getAgeFromDateOfBirth(dateOfBirth: string) {
   return age;
 }
 
+function getApplicationDisplayName(firstName: string, lastName: string) {
+  return `${firstName} ${lastName}`.trim();
+}
+
 function createCaptchaRequiredResponse(
   request: Request,
   retryAfterSeconds: number | null,
@@ -314,7 +318,8 @@ export async function POST(request: Request) {
 
   try {
     const {
-      fullName,
+      firstName,
+      lastName,
       dateOfBirth,
       placeOfBirth,
       streetAddress,
@@ -328,11 +333,13 @@ export async function POST(request: Request) {
       consentsToDataProcessing,
       acceptsStatuteAndProgram,
     } = parsedBody.data;
+    const displayName = getApplicationDisplayName(firstName, lastName);
 
     const [createdApplication] = await db
       .insert(mladiPiratiMembershipApplications)
       .values({
-        fullName,
+        firstName,
+        lastName,
         dateOfBirth,
         placeOfBirth,
         streetAddress,
@@ -374,7 +381,7 @@ export async function POST(request: Request) {
       fields: [
         {
           name: "Name",
-          value: fullName,
+          value: displayName,
           inline: true,
         },
         {

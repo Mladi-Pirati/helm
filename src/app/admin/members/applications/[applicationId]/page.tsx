@@ -74,7 +74,8 @@ export default async function AdminMembershipApplicationPage({
   const [application] = await db
     .select({
       id: mladiPiratiMembershipApplications.id,
-      fullName: mladiPiratiMembershipApplications.fullName,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
       streetAddress: mladiPiratiMembershipApplications.streetAddress,
@@ -104,6 +105,8 @@ export default async function AdminMembershipApplicationPage({
 
   const participationMode = application.participationMode as ParticipationMode;
   const residenceRegion = application.residenceRegion as ResidenceRegion;
+  const displayName =
+    `${application.firstName} ${application.lastName}`.trim();
 
   return (
     <div className="grid gap-6">
@@ -113,7 +116,7 @@ export default async function AdminMembershipApplicationPage({
             <Link href={backHref}>Back to applications</Link>
           </Button>
           <div className="grid gap-1">
-            <h1 className="text-xl font-semibold">{application.fullName}</h1>
+            <h1 className="text-xl font-semibold">{displayName}</h1>
             <p className="text-xs text-muted-foreground">
               Submitted on {formatDateTime(application.createdAt)}
             </p>
@@ -144,7 +147,8 @@ export default async function AdminMembershipApplicationPage({
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <DetailItem label="Full name" value={application.fullName} />
+              <DetailItem label="First name" value={application.firstName} />
+              <DetailItem label="Last name" value={application.lastName} />
               <DetailItem label="Email" value={application.email} />
               <DetailItem
                 label="Phone"

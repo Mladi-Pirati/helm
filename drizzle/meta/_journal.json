@@ -78,6 +78,13 @@
       "when": 1780006587441,
       "tag": "0011_silky_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780050000000,
+      "tag": "0012_separate_membership_application_names",
+      "breakpoints": true
     }
   ]
 }

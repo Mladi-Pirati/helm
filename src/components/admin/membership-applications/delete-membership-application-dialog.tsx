@@ -17,6 +17,10 @@ import {
 import { Button } from "@/components/ui/button";
 import type { MembershipApplicationListRow } from "./membership-applications-management";
 
+function getApplicationDisplayName(row: MembershipApplicationListRow) {
+  return `${row.firstName} ${row.lastName}`.trim();
+}
+
 export function DeleteMembershipApplicationDialog({
   row,
 }: {
@@ -54,8 +58,8 @@ export function DeleteMembershipApplicationDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete application</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete the membership application for {row.fullName} ({row.email})
-            permanently. This action cannot be undone.
+            Delete the membership application for {getApplicationDisplayName(row)}{" "}
+            ({row.email}) permanently. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {serverMessage ? (

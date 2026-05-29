@@ -38,7 +38,8 @@ import {
 
 export type MembershipApplicationListRow = {
   id: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   cityAndPostalCode: string;
   residenceRegion: ResidenceRegion;
   email: string;
@@ -49,6 +50,12 @@ export type MembershipApplicationListRow = {
 
 function formatDateTime(value: string) {
   return formatSlovenianDateTime(new Date(value));
+}
+
+function getApplicationDisplayName(
+  row: Pick<MembershipApplicationListRow, "firstName" | "lastName">,
+) {
+  return `${row.firstName} ${row.lastName}`.trim();
 }
 
 export function MembershipApplicationsManagement({
@@ -62,13 +69,13 @@ export function MembershipApplicationsManagement({
 }) {
   const columns: ColumnDef<MembershipApplicationListRow>[] = [
     {
-      accessorKey: "fullName",
+      id: "name",
       header: "Applicant",
       size: 220,
       cell: ({ row }) => (
         <div className="min-w-0">
           <p className="truncate font-medium text-foreground">
-            {row.original.fullName}
+            {getApplicationDisplayName(row.original)}
           </p>
         </div>
       ),

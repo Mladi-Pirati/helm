@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
   const baseQuery = db
     .select({
       id: mladiPiratiMembershipApplications.id,
-      fullName: mladiPiratiMembershipApplications.fullName,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
       streetAddress: mladiPiratiMembershipApplications.streetAddress,
@@ -113,7 +114,11 @@ export async function GET(request: NextRequest) {
       />,
     );
 
-    const baseName = `${slugify(row.fullName) || "application"}-${row.id.slice(0, 8)}`;
+    const displayName = `${row.firstName} ${row.lastName}`.trim();
+    const baseName = `${slugify(displayName) || "application"}-${row.id.slice(
+      0,
+      8,
+    )}`;
     let filename = `${baseName}.pdf`;
     let counter = 2;
     while (usedFilenames.has(filename)) {

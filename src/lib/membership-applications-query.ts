@@ -1,4 +1,4 @@
-import { and, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import type { MembershipApplicationsListFilters } from "@/lib/membership-applications";
@@ -13,7 +13,14 @@ export function buildMembershipApplicationsWhere(
 
     whereClauses.push(
       or(
-        ilike(mladiPiratiMembershipApplications.fullName, searchPattern),
+        ilike(mladiPiratiMembershipApplications.firstName, searchPattern),
+        ilike(mladiPiratiMembershipApplications.lastName, searchPattern),
+        ilike(
+          sql`${mladiPiratiMembershipApplications.firstName} || ' ' || ${
+            mladiPiratiMembershipApplications.lastName
+          }`,
+          searchPattern,
+        ),
         ilike(mladiPiratiMembershipApplications.email, searchPattern),
         ilike(
           mladiPiratiMembershipApplications.cityAndPostalCode,

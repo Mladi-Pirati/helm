@@ -65,7 +65,8 @@ export default async function AdminMembershipApplicationsPage({
   const baseQuery = db
     .select({
       id: mladiPiratiMembershipApplications.id,
-      fullName: mladiPiratiMembershipApplications.fullName,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
       cityAndPostalCode:
         mladiPiratiMembershipApplications.cityAndPostalCode,
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,

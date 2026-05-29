@@ -61,7 +61,8 @@ export const mladiPiratiMembershipApplications = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    fullName: text("full_name").notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
     dateOfBirth: date("date_of_birth", { mode: "string" }).notNull(),
     placeOfBirth: text("place_of_birth").notNull(),
     streetAddress: text("street_address").notNull(),
