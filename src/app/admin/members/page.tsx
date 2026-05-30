@@ -46,6 +46,7 @@ export default async function MembersPage({
   const filtersKey = [
     filters.q,
     filters.roleId,
+    filters.sort,
     filters.status,
     filters.page,
     filters.pageSize,
@@ -83,11 +84,11 @@ export default async function MembersPage({
       <MembersFilterForm
         filters={filters}
         key={filtersKey}
-        roleOptions={roleOptions}
       />
 
       <MembersManagement
         canCreate={permissions.includes("members.create")}
+        filters={filters}
         nextPageHref={buildMembersListHref({
           ...filters,
           page: Math.min(pageCount, filters.page + 1),
@@ -119,6 +120,7 @@ export default async function MembersPage({
           disabledAt: row.disabledAt?.toISOString() ?? null,
           updatedAt: row.updatedAt.toISOString(),
         }))}
+        roleOptions={roleOptions}
         totalCount={totalCount}
       />
     </div>

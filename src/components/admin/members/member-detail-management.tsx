@@ -7,12 +7,14 @@ import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { move } from "@dnd-kit/helpers";
-import { GripVerticalIcon, RotateCwIcon } from "lucide-react";
+import { GripVerticalIcon, RotateCwIcon, Trash2Icon } from "lucide-react";
 
+import { setMemberApplicationAccessAction } from "@/actions/access-applications";
 import {
   appendMembershipRenewalAction,
   deleteAddressAction,
   deleteContactAction,
+  deleteMemberAction,
   endMembershipAction,
   reorderContactsAction,
   setMemberDisabledAction,
@@ -21,15 +23,21 @@ import {
   updateMemberRolesAction,
   upsertAddressAction,
   upsertContactAction,
+  type DeleteMemberMode,
 } from "@/actions/members";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,7 +48,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ADDRESS_LABELS, CONTACT_TYPES, type AddressLabel, type ContactType } from "@/db/schema";
+import {
+  ADDRESS_LABELS,
+  CONTACT_TYPES,
+  type AddressLabel,
+  type ContactType,
+} from "@/db/schema";
 import { formatSlovenianDateTime } from "@/lib/date-format";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +65,20 @@ type RoleOption = {
 
 type AssignedRole = RoleOption & {
   expiresAt: string | null;
+};
+
+type ApplicationOption = {
+  archivedAt: string | null;
+  description: string | null;
+  id: string;
+  keycloakClientId: string;
+  keycloakRoleName: string;
+  name: string;
+};
+
+type AssignedApplication = {
+  applicationId: string;
+  grantedAt: string;
 };
 
 type ContactRow = {
@@ -105,9 +132,11 @@ function Field({ children }: { children: React.ReactNode }) {
 }
 
 function ProfileTab({
+  canDelete,
   canUpdate,
   member,
 }: {
+  canDelete: boolean;
   canUpdate: boolean;
   member: MemberDetail;
 }) {
@@ -150,7 +179,10 @@ function ProfileTab({
   function toggleDisabled() {
     setMessage(null);
     startTransition(async () => {
-      const result = await setMemberDisabledAction(member.id, !member.disabledAt);
+      const result = await setMemberDisabledAction(
+        member.id,
+        !member.disabledAt,
+      );
       setMessage(result.message ?? null);
       if (result.ok) router.refresh();
     });
@@ -261,11 +293,124 @@ function ProfileTab({
             >
               {member.disabledAt ? "Re-enable member" : "Disable member"}
             </Button>
+            {canDelete ? <DeleteMemberDialog member={member} /> : null}
             <Message value={message} />
           </div>
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+const deleteMemberOptions: {
+  description: string;
+  label: string;
+  mode: DeleteMemberMode;
+}[] = [
+  {
+    description: "Delete only this member record and local profile data.",
+    label: "Delete locally",
+    mode: "local",
+  },
+  {
+    description: "Delete this member and permanently delete the Keycloak user.",
+    label: "Delete locally and in Keycloak",
+    mode: "local-and-keycloak",
+  },
+  {
+    description:
+      "Delete this member after removing all default-client and Helm application roles.",
+    label: "Delete locally and revoke Helm roles",
+    mode: "local-and-revoke-helm",
+  },
+];
+
+function DeleteMemberDialog({ member }: { member: MemberDetail }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<DeleteMemberMode>("local");
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const displayName =
+    `${member.firstName} ${member.lastName}`.trim() || member.username;
+
+  function remove() {
+    setServerMessage(null);
+    startTransition(async () => {
+      const result = await deleteMemberAction(member.id, mode);
+      if (!result.ok) {
+        setServerMessage(result.message);
+        return;
+      }
+
+      setOpen(false);
+      router.push("/admin/members");
+      router.refresh();
+    });
+  }
+
+  return (
+    <AlertDialog
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) setServerMessage(null);
+      }}
+      open={open}
+    >
+      <AlertDialogTrigger asChild>
+        <Button type="button" variant="destructive">
+          <Trash2Icon />
+          Delete member
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete member</AlertDialogTitle>
+          <AlertDialogDescription>
+            Delete {displayName} (@{member.username}) permanently. This action
+            cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="grid gap-2">
+          {deleteMemberOptions.map((option) => (
+            <label
+              className="grid cursor-pointer gap-1 border p-3 text-xs has-[:checked]:border-destructive"
+              key={option.mode}
+            >
+              <span className="flex items-center gap-2 font-medium text-foreground">
+                <input
+                  checked={mode === option.mode}
+                  disabled={isPending}
+                  name="delete-member-mode"
+                  onChange={() => setMode(option.mode)}
+                  type="radio"
+                />
+                {option.label}
+              </span>
+              <span className="text-muted-foreground">
+                {option.description}
+              </span>
+            </label>
+          ))}
+        </div>
+        {serverMessage ? (
+          <p className="text-xs font-medium text-destructive">
+            {serverMessage}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <Button
+            disabled={isPending}
+            onClick={remove}
+            type="button"
+            variant="destructive"
+          >
+            {isPending ? "Deleting..." : "Delete member"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -455,7 +600,10 @@ function ContactsTab({
             />
           ))}
         </DragDropProvider>
-        <form className="grid gap-2 p-4 md:grid-cols-[140px_minmax(0,1fr)_140px_auto_auto] md:items-center" onSubmit={add}>
+        <form
+          className="grid gap-2 p-4 md:grid-cols-[140px_minmax(0,1fr)_140px_auto_auto] md:items-center"
+          onSubmit={add}
+        >
           <Select defaultValue="email" name="type">
             <SelectTrigger disabled={!canUpdate}>
               <SelectValue />
@@ -555,12 +703,32 @@ function AddressesTab({
                 ))}
               </SelectContent>
             </Select>
-            <Input defaultValue={address.street} disabled={!canUpdate} name="street" />
-            <Input defaultValue={address.city} disabled={!canUpdate} name="city" />
-            <Input defaultValue={address.postalCode} disabled={!canUpdate} name="postalCode" />
-            <Input defaultValue={address.country} disabled={!canUpdate} name="country" />
+            <Input
+              defaultValue={address.street}
+              disabled={!canUpdate}
+              name="street"
+            />
+            <Input
+              defaultValue={address.city}
+              disabled={!canUpdate}
+              name="city"
+            />
+            <Input
+              defaultValue={address.postalCode}
+              disabled={!canUpdate}
+              name="postalCode"
+            />
+            <Input
+              defaultValue={address.country}
+              disabled={!canUpdate}
+              name="country"
+            />
             <div className="flex gap-2">
-              <Button disabled={!canUpdate || isPending} size="xs" type="submit">
+              <Button
+                disabled={!canUpdate || isPending}
+                size="xs"
+                type="submit"
+              >
                 Save
               </Button>
               <Button
@@ -593,7 +761,11 @@ function AddressesTab({
           </Select>
           <Input disabled={!canUpdate} name="street" placeholder="Street" />
           <Input disabled={!canUpdate} name="city" placeholder="City" />
-          <Input disabled={!canUpdate} name="postalCode" placeholder="Postal code" />
+          <Input
+            disabled={!canUpdate}
+            name="postalCode"
+            placeholder="Postal code"
+          />
           <Input disabled={!canUpdate} name="country" placeholder="Country" />
           <Button disabled={!canUpdate || isPending} type="submit">
             Add address
@@ -836,9 +1008,123 @@ function RolesTab({
   );
 }
 
+function ApplicationsTab({
+  applications,
+  assignedApplications,
+  canManageRoles,
+  memberId,
+}: {
+  applications: ApplicationOption[];
+  assignedApplications: AssignedApplication[];
+  canManageRoles: boolean;
+  memberId: string;
+}) {
+  const router = useRouter();
+  const [message, setMessage] = useState<string | null>(null);
+  const [pendingApplicationId, setPendingApplicationId] = useState<
+    string | null
+  >(null);
+  const [isPending, startTransition] = useTransition();
+  const assignedApplicationIds = new Set(
+    assignedApplications.map((assignment) => assignment.applicationId),
+  );
+  const visibleApplications = applications.filter(
+    (application) =>
+      !application.archivedAt || assignedApplicationIds.has(application.id),
+  );
+
+  function setAccess(applicationId: string, assigned: boolean) {
+    setMessage(null);
+    setPendingApplicationId(applicationId);
+    startTransition(async () => {
+      const result = await setMemberApplicationAccessAction(memberId, {
+        applicationId,
+        assigned,
+      });
+      setMessage(result.message ?? null);
+      setPendingApplicationId(null);
+      if (result.ok) router.refresh();
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle className="font-bold">Applications</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 p-4">
+          {visibleApplications.map((application) => {
+            const assigned = assignedApplicationIds.has(application.id);
+            const archived = Boolean(application.archivedAt);
+            return (
+              <div
+                className="grid gap-3 border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                key={application.id}
+              >
+                <div className="grid min-w-0 gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {application.name}
+                    </span>
+                    {archived ? (
+                      <Badge variant="outline">Archived</Badge>
+                    ) : assigned ? (
+                      <Badge>Assigned</Badge>
+                    ) : (
+                      <Badge variant="outline">Not assigned</Badge>
+                    )}
+                  </div>
+                  {application.description ? (
+                    <p className="text-xs text-muted-foreground">
+                      {application.description}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>{application.keycloakClientId}</span>
+                    <span>{application.keycloakRoleName}</span>
+                  </div>
+                </div>
+                {archived ? (
+                  <span className="text-xs text-muted-foreground">
+                    History only
+                  </span>
+                ) : (
+                  <Button
+                    disabled={
+                      !canManageRoles ||
+                      isPending ||
+                      pendingApplicationId === application.id
+                    }
+                    onClick={() => setAccess(application.id, !assigned)}
+                    size="xs"
+                    type="button"
+                    variant={assigned ? "outline" : "default"}
+                  >
+                    {assigned ? "Remove access" : "Grant access"}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+          {!visibleApplications.length ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              No applications configured.
+            </div>
+          ) : null}
+          <Message value={message} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function MemberDetailManagement({
   addresses,
+  applications,
+  assignedApplications,
   assignedRoles,
+  canDelete,
   canManageRoles,
   canUpdate,
   contacts,
@@ -847,7 +1133,10 @@ export function MemberDetailManagement({
   roles,
 }: {
   addresses: AddressRow[];
+  applications: ApplicationOption[];
+  assignedApplications: AssignedApplication[];
   assignedRoles: AssignedRole[];
+  canDelete: boolean;
   canManageRoles: boolean;
   canUpdate: boolean;
   contacts: ContactRow[];
@@ -883,7 +1172,9 @@ export function MemberDetailManagement({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold">{fullName || member.username}</h1>
+            <h1 className="text-xl font-semibold">
+              {fullName || member.username}
+            </h1>
             {member.disabledAt ? (
               <Badge variant="outline">Disabled</Badge>
             ) : (
@@ -898,8 +1189,13 @@ export function MemberDetailManagement({
           <Link href="/admin/members">Back to members</Link>
         </Button>
       </div>
-      
-      <ProfileTab canUpdate={canUpdate} key={profileKey} member={member} />
+
+      <ProfileTab
+        canDelete={canDelete}
+        canUpdate={canUpdate}
+        key={profileKey}
+        member={member}
+      />
 
       <ContactsTab
         canUpdate={canUpdate}
@@ -925,6 +1221,13 @@ export function MemberDetailManagement({
         canManageRoles={canManageRoles}
         memberId={member.id}
         roles={roles}
+      />
+
+      <ApplicationsTab
+        applications={applications}
+        assignedApplications={assignedApplications}
+        canManageRoles={canManageRoles}
+        memberId={member.id}
       />
 
       {/* <Tabs defaultValue="overview">

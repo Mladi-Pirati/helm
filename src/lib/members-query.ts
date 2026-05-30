@@ -25,7 +25,10 @@ import {
   permissions,
 } from "@/db/schema";
 import type { MembersListFilters } from "@/lib/members";
-import { NO_ROLES_MEMBER_ROLE_FILTER } from "@/lib/members";
+import {
+  NO_ROLES_MEMBER_ROLE_FILTER,
+  type MemberListSort,
+} from "@/lib/members";
 
 export function buildMembersWhere(
   filters: MembersListFilters,
@@ -57,46 +60,73 @@ export function buildMembersWhere(
     );
   }
 
-  if (filters.roleId === NO_ROLES_MEMBER_ROLE_FILTER) {
-    whereClauses.push(
-      notExists(
-        db
-          .select({ value: sql`1` })
-          .from(memberRoles)
-          .where(
-            and(
-              eq(memberRoles.memberId, members.id),
-              or(
-                isNull(memberRoles.expiresAt),
-                gte(memberRoles.expiresAt, now),
+  const roleIds = filters.roleId.filter(
+    (roleId) => roleId !== NO_ROLES_MEMBER_ROLE_FILTER,
+  );
+  const includesNoRoles = filters.roleId.includes(NO_ROLES_MEMBER_ROLE_FILTER);
+
+  if (includesNoRoles || roleIds.length) {
+    const roleClauses = [];
+
+    if (includesNoRoles) {
+      roleClauses.push(
+        notExists(
+          db
+            .select({ value: sql`1` })
+            .from(memberRoles)
+            .where(
+              and(
+                eq(memberRoles.memberId, members.id),
+                or(
+                  isNull(memberRoles.expiresAt),
+                  gte(memberRoles.expiresAt, now),
+                ),
               ),
             ),
-          ),
-      ),
-    );
-  } else if (filters.roleId) {
-    whereClauses.push(
-      exists(
-        db
-          .select({ value: sql`1` })
-          .from(memberRoles)
-          .where(
-            and(
-              eq(memberRoles.memberId, members.id),
-              eq(memberRoles.roleId, filters.roleId),
-              or(
-                isNull(memberRoles.expiresAt),
-                gte(memberRoles.expiresAt, now),
+        ),
+      );
+    }
+
+    if (roleIds.length) {
+      roleClauses.push(
+        exists(
+          db
+            .select({ value: sql`1` })
+            .from(memberRoles)
+            .where(
+              and(
+                eq(memberRoles.memberId, members.id),
+                inArray(memberRoles.roleId, roleIds),
+                or(
+                  isNull(memberRoles.expiresAt),
+                  gte(memberRoles.expiresAt, now),
+                ),
               ),
             ),
-          ),
-      ),
-    );
+        ),
+      );
+    }
+
+    if (roleClauses.length === 1) {
+      whereClauses.push(roleClauses[0]);
+    } else {
+      whereClauses.push(or(...roleClauses));
+    }
   }
 
   if (whereClauses.length === 0) return undefined;
   if (whereClauses.length === 1) return whereClauses[0];
   return and(...whereClauses);
+}
+
+export function buildMembersOrderBy(sort: MemberListSort) {
+  const fullName = sql`lower(trim((${members.firstName} || ${" "} || ${members.lastName})))`;
+
+  return [
+    sort === "name-desc" ? desc(fullName) : asc(fullName),
+    asc(members.username),
+    asc(members.id),
+  ];
 }
 
 export async function getMembersPage(filters: MembersListFilters) {
@@ -122,11 +152,7 @@ export async function getMembersPage(filters: MembersListFilters) {
     .from(members);
 
   const rows = await (where ? baseRowsQuery.where(where) : baseRowsQuery)
-    .orderBy(
-      desc(members.updatedAt),
-      asc(members.lastName),
-      asc(members.firstName),
-    )
+    .orderBy(...buildMembersOrderBy(filters.sort))
     .limit(filters.pageSize)
     .offset(offset);
 

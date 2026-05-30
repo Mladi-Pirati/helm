@@ -80,7 +80,12 @@ export type KeycloakAdminConfig = {
 };
 
 export type KeycloakUser = z.infer<typeof keycloakUserSchema>;
+export type KeycloakClient = z.infer<typeof keycloakClientSchema>;
 export type KeycloakClientRole = z.infer<typeof keycloakRoleSchema>;
+export type KeycloakClientRoleAssignment = {
+  clientId: string;
+  roleName: string;
+};
 export type KeycloakUserProfileUpdate = {
   email: string | null;
   firstName: string;
@@ -139,7 +144,9 @@ export function getKeycloakAdminConfigFromEnv(
   }
 
   const issuerPrefix =
-    realmMarkerIndex === -1 ? "" : issuerUrl.pathname.slice(0, realmMarkerIndex);
+    realmMarkerIndex === -1
+      ? ""
+      : issuerUrl.pathname.slice(0, realmMarkerIndex);
   const adminBaseUrl =
     parsed.KEYCLOAK_ADMIN?.replace(/\/+$/, "") ??
     `${issuerUrl.origin}${issuerPrefix}/admin/realms/${encodeRealmPathPart(realm)}`;
@@ -299,16 +306,15 @@ class KeycloakAdminClient {
       (await this.findUserByUsername(values.username));
 
     if (!createdUser) {
-      throw new KeycloakAdminError("Created Keycloak user could not be resolved.");
+      throw new KeycloakAdminError(
+        "Created Keycloak user could not be resolved.",
+      );
     }
 
     return createdUser;
   }
 
-  async updateUserProfile(
-    userId: string,
-    values: KeycloakUserProfileUpdate,
-  ) {
+  async updateUserProfile(userId: string, values: KeycloakUserProfileUpdate) {
     const currentUser = await this.getUserRepresentation(userId);
     const emailChanged = (currentUser.email ?? null) !== values.email;
 
@@ -319,6 +325,12 @@ class KeycloakAdminClient {
         ...values,
         ...(emailChanged ? { emailVerified: false } : {}),
       },
+    );
+  }
+
+  async deleteUser(userId: string) {
+    await this.delete(
+      `${this.config.adminBaseUrl}/users/${encodeURIComponent(userId)}`,
     );
   }
 
@@ -343,6 +355,63 @@ class KeycloakAdminClient {
           userId,
         )}/role-mappings/clients/${encodeURIComponent(clientUuid)}`,
       ),
+    );
+  }
+
+  async searchClients(query: string, max = 20) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return [];
+
+    return keycloakClientsResponseSchema
+      .parse(
+        await this.get(`${this.config.adminBaseUrl}/clients`, {
+          clientId: trimmedQuery,
+          first: 0,
+          max,
+        }),
+      )
+      .slice(0, max);
+  }
+
+  async listRolesForClient(clientId: string) {
+    const clientUuid = await this.getClientUuidByClientId(clientId);
+
+    return keycloakRolesResponseSchema.parse(
+      await this.get(
+        `${this.config.adminBaseUrl}/clients/${encodeURIComponent(
+          clientUuid,
+        )}/roles`,
+      ),
+    );
+  }
+
+  async addClientRole(
+    userId: string,
+    assignment: KeycloakClientRoleAssignment,
+  ) {
+    const { clientUuid, role } =
+      await this.getClientRoleForAssignment(assignment);
+
+    await this.post(
+      `${this.config.adminBaseUrl}/users/${encodeURIComponent(
+        userId,
+      )}/role-mappings/clients/${encodeURIComponent(clientUuid)}`,
+      [role],
+    );
+  }
+
+  async removeClientRole(
+    userId: string,
+    assignment: KeycloakClientRoleAssignment,
+  ) {
+    const { clientUuid, role } =
+      await this.getClientRoleForAssignment(assignment);
+
+    await this.delete(
+      `${this.config.adminBaseUrl}/users/${encodeURIComponent(
+        userId,
+      )}/role-mappings/clients/${encodeURIComponent(clientUuid)}`,
+      [role],
     );
   }
 
@@ -396,24 +465,52 @@ class KeycloakAdminClient {
       return this.clientUuid;
     }
 
+    this.clientUuid = await this.getClientUuidByClientId(this.config.clientId);
+
+    return this.clientUuid;
+  }
+
+  private async getClientUuidByClientId(clientId: string) {
+    const trimmedClientId = clientId.trim();
+    if (!trimmedClientId) {
+      throw new KeycloakAdminError("Keycloak client id is required.");
+    }
+
     const clients = keycloakClientsResponseSchema.parse(
       await this.get(`${this.config.adminBaseUrl}/clients`, {
-        clientId: this.config.clientId,
+        clientId: trimmedClientId,
       }),
     );
     const client = clients.find(
-      (candidate) => candidate.clientId === this.config.clientId,
+      (candidate) => candidate.clientId === trimmedClientId,
     );
 
     if (!client) {
       throw new KeycloakAdminError(
-        `Keycloak client "${this.config.clientId}" could not be found.`,
+        `Keycloak client "${trimmedClientId}" could not be found.`,
       );
     }
 
-    this.clientUuid = client.id;
-
     return client.id;
+  }
+
+  private async getClientRoleForAssignment(
+    assignment: KeycloakClientRoleAssignment,
+  ) {
+    const clientUuid = await this.getClientUuidByClientId(assignment.clientId);
+    const roleName = assignment.roleName.trim();
+    if (!roleName) {
+      throw new KeycloakAdminError("Keycloak client role is required.");
+    }
+    const role = keycloakRoleSchema.parse(
+      await this.get(
+        `${this.config.adminBaseUrl}/clients/${encodeURIComponent(
+          clientUuid,
+        )}/roles/${encodeURIComponent(roleName)}`,
+      ),
+    );
+
+    return { clientUuid, role };
   }
 
   private async getUserRepresentation(userId: string) {
@@ -424,7 +521,9 @@ class KeycloakAdminClient {
     );
   }
 
-  private async findExactUser(params: { email: string } | { username: string }) {
+  private async findExactUser(
+    params: { email: string } | { username: string },
+  ) {
     const users = keycloakUsersResponseSchema.parse(
       await this.get(`${this.config.adminBaseUrl}/users`, {
         briefRepresentation: false,
@@ -436,7 +535,9 @@ class KeycloakAdminClient {
     );
 
     if (users.length > 1) {
-      throw new KeycloakAdminError("Keycloak exact user lookup returned multiple users.");
+      throw new KeycloakAdminError(
+        "Keycloak exact user lookup returned multiple users.",
+      );
     }
 
     return users[0] ?? null;
@@ -466,7 +567,7 @@ class KeycloakAdminClient {
     });
   }
 
-  private async delete(url: string, data: unknown) {
+  private async delete(url: string, data?: unknown) {
     await this.http.delete(url, {
       data,
       headers: await this.getAuthorizationHeaders(),
@@ -518,8 +619,9 @@ function getHeaderValue(
     (headers as Record<string, unknown>)[name] ??
     (headers as Record<string, unknown>)[name.toLowerCase()] ??
     (headers as Record<string, unknown>)[
-      name.replace(/(^|-)([a-z])/g, (_, prefix: string, char: string) =>
-        `${prefix}${char.toUpperCase()}`,
+      name.replace(
+        /(^|-)([a-z])/g,
+        (_, prefix: string, char: string) => `${prefix}${char.toUpperCase()}`,
       )
     ];
 

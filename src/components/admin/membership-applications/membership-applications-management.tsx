@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   flexRender,
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
 } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BulkMembershipApplicationActionDialog } from "@/components/admin/membership-applications/bulk-membership-application-action-dialog";
 import { DeleteMembershipApplicationDialog } from "@/components/admin/membership-applications/delete-membership-application-dialog";
 import { formatSlovenianDateTime } from "@/lib/date-format";
 import {
@@ -67,7 +71,42 @@ export function MembershipApplicationsManagement({
   queryString: string;
   rows: MembershipApplicationListRow[];
 }) {
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [feedback, setFeedback] = useState<{
+    kind: "error" | "success";
+    message: string;
+  } | null>(null);
   const columns: ColumnDef<MembershipApplicationListRow>[] = [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          aria-label="Select all visible applications"
+          checked={
+            table.getIsAllRowsSelected()
+              ? true
+              : table.getIsSomeRowsSelected()
+                ? "indeterminate"
+                : false
+          }
+          onCheckedChange={(value) => {
+            table.toggleAllRowsSelected(!!value);
+            setFeedback(null);
+          }}
+        />
+      ),
+      size: 44,
+      cell: ({ row }) => (
+        <Checkbox
+          aria-label={`Select application for ${getApplicationDisplayName(row.original)}`}
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => {
+            row.toggleSelected(!!value);
+            setFeedback(null);
+          }}
+        />
+      ),
+    },
     {
       id: "name",
       header: "Applicant",
@@ -162,9 +201,26 @@ export function MembershipApplicationsManagement({
   const table = useReactTable({
     columns,
     data: rows,
+    enableRowSelection: true,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      rowSelection,
+    },
   });
+  const selectedRows = table
+    .getSelectedRowModel()
+    .rows.map((row) => row.original);
+  const selectedCount = selectedRows.length;
+  const hasSelection = selectedCount > 0;
+  const handleBulkSuccess = (message: string) => {
+    setFeedback({
+      kind: "success",
+      message,
+    });
+    setRowSelection({});
+  };
 
   return (
     <Card>
@@ -172,13 +228,93 @@ export function MembershipApplicationsManagement({
         <CardTitle>Applications queue</CardTitle>
       </CardHeader>
       <CardContent className="px-0">
+        <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-h-4">
+            {feedback ? (
+              <p
+                className={
+                  feedback.kind === "error"
+                    ? "text-xs font-medium text-destructive"
+                    : "text-xs text-muted-foreground"
+                }
+              >
+                {feedback.message}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {selectedCount
+                  ? `${selectedCount} selected`
+                  : "Select applications to use bulk actions."}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <BulkMembershipApplicationActionDialog
+              action="approve"
+              disabled={!hasSelection}
+              onSuccess={handleBulkSuccess}
+              rows={selectedRows}
+            >
+              <Button disabled={!hasSelection} size="xs" type="button">
+                Approve
+              </Button>
+            </BulkMembershipApplicationActionDialog>
+            <BulkMembershipApplicationActionDialog
+              action="reject"
+              disabled={!hasSelection}
+              onSuccess={handleBulkSuccess}
+              rows={selectedRows}
+            >
+              <Button
+                disabled={!hasSelection}
+                size="xs"
+                type="button"
+                variant="destructive"
+              >
+                Reject
+              </Button>
+            </BulkMembershipApplicationActionDialog>
+            <BulkMembershipApplicationActionDialog
+              action="pending"
+              disabled={!hasSelection}
+              onSuccess={handleBulkSuccess}
+              rows={selectedRows}
+            >
+              <Button
+                disabled={!hasSelection}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                Set pending
+              </Button>
+            </BulkMembershipApplicationActionDialog>
+            {canDelete ? (
+              <BulkMembershipApplicationActionDialog
+                action="delete"
+                disabled={!hasSelection}
+                onSuccess={handleBulkSuccess}
+                rows={selectedRows}
+              >
+                <Button
+                  disabled={!hasSelection}
+                  size="xs"
+                  type="button"
+                  variant="destructive"
+                >
+                  Delete
+                </Button>
+              </BulkMembershipApplicationActionDialog>
+            ) : null}
+          </div>
+        </div>
         {table.getRowModel().rows.length ? (
           <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} style={{ width: header.getSize() }}>
+                    <TableHead key={header.id} className="font-extrabold" style={{ width: header.getSize() }}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -13,8 +13,12 @@ import {
 import { hasPermission } from "@/lib/auth/permissions";
 import { provisionMembershipApplicationMember } from "@/lib/membership-application-provisioning";
 import {
+  buildBulkMembershipApplicationActionMessage,
+  bulkMembershipApplicationActions,
+  dedupeMembershipApplicationIds,
   hasValidRejectionReason,
   reviewMembershipApplicationStatuses,
+  type BulkMembershipApplicationAction,
   type ReviewMembershipApplicationStatus,
 } from "@/lib/membership-applications";
 
@@ -49,6 +53,15 @@ type DeleteMembershipApplicationActionResult =
     }
   | MembershipApplicationActionFailure;
 
+type BulkMembershipApplicationActionResult =
+  | {
+      ok: true;
+      affectedCount: number;
+      memberCreationFailureCount: number;
+      message: string;
+    }
+  | MembershipApplicationActionFailure;
+
 const updateMembershipApplicationStatusSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
   status: z.enum(reviewMembershipApplicationStatuses),
@@ -70,16 +83,43 @@ const deleteMembershipApplicationSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
 });
 
+const bulkMembershipApplicationActionSchema = z.object({
+  action: z.enum(bulkMembershipApplicationActions),
+  applicationIds: z
+    .array(z.string())
+    .transform(dedupeMembershipApplicationIds)
+    .refine((applicationIds) => applicationIds.length > 0, {
+      message: "Select at least one application.",
+    }),
+  rejectionReason: z.string().optional(),
+}).superRefine((values, context) => {
+  if (
+    values.action === "reject" &&
+    !hasValidRejectionReason(values.rejectionReason ?? "")
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Please enter a rejection reason with at least 4 words.",
+      path: ["rejectionReason"],
+    });
+  }
+});
+
 const retryMembershipApplicationMemberCreationSchema = z.object({
   applicationId: z.string().trim().min(1, "Application id is required."),
 });
 
-async function requireMembershipApplicationsPermission() {
-  const allowed = await hasPermission("members.read");
+async function requireMembershipApplicationsPermission(
+  permissionKey: "members.delete" | "members.read" = "members.read",
+) {
+  const allowed = await hasPermission(permissionKey);
   if (!allowed) {
     return {
       ok: false as const,
-      message: "You are not allowed to review membership applications.",
+      message:
+        permissionKey === "members.delete"
+          ? "You are not allowed to delete membership applications."
+          : "You are not allowed to review membership applications.",
     };
   }
   return { ok: true as const };
@@ -256,7 +296,7 @@ export async function retryMembershipApplicationMemberCreationAction(
 export async function deleteMembershipApplicationAction(
   applicationId: string,
 ): Promise<DeleteMembershipApplicationActionResult> {
-  const access = await requireMembershipApplicationsPermission();
+  const access = await requireMembershipApplicationsPermission("members.delete");
 
   if (!access.ok) {
     return {
@@ -314,6 +354,137 @@ export async function deleteMembershipApplicationAction(
     ok: true,
     message: "Application deleted successfully.",
   };
+}
+
+export async function bulkMembershipApplicationAction(values: {
+  action: BulkMembershipApplicationAction;
+  applicationIds: string[];
+  rejectionReason?: string;
+}): Promise<BulkMembershipApplicationActionResult> {
+  const parsedValues = bulkMembershipApplicationActionSchema.safeParse(values);
+
+  if (!parsedValues.success) {
+    return {
+      ok: false,
+      message:
+        parsedValues.error.issues[0]?.message ??
+        "Please choose a valid bulk action.",
+    };
+  }
+
+  const access = await requireMembershipApplicationsPermission(
+    parsedValues.data.action === "delete" ? "members.delete" : "members.read",
+  );
+
+  if (!access.ok) {
+    return {
+      ok: false,
+      message: access.message,
+    };
+  }
+
+  const applicationIds = parsedValues.data.applicationIds;
+  let affectedApplicationIds: string[] = [];
+  let memberCreationFailureCount = 0;
+
+  try {
+    if (parsedValues.data.action === "delete") {
+      const deletedApplications = await db
+        .delete(mladiPiratiMembershipApplications)
+        .where(inArray(mladiPiratiMembershipApplications.id, applicationIds))
+        .returning({
+          id: mladiPiratiMembershipApplications.id,
+        });
+
+      affectedApplicationIds = deletedApplications.map(
+        (application) => application.id,
+      );
+    } else {
+      const status = getBulkMembershipApplicationStatus(
+        parsedValues.data.action,
+      );
+      const rejectionReason =
+        parsedValues.data.action === "reject"
+          ? (parsedValues.data.rejectionReason?.trim() ?? null)
+          : null;
+      const updatedApplications = await db
+        .update(mladiPiratiMembershipApplications)
+        .set({
+          status,
+          rejectionReason,
+          memberCreationStatus: null,
+          updatedAt: new Date(),
+        })
+        .where(inArray(mladiPiratiMembershipApplications.id, applicationIds))
+        .returning({
+          id: mladiPiratiMembershipApplications.id,
+        });
+
+      affectedApplicationIds = updatedApplications.map(
+        (application) => application.id,
+      );
+
+      if (status === "approved") {
+        for (const applicationId of affectedApplicationIds) {
+          const memberCreationStatus =
+            await createMemberForApprovedApplication(applicationId);
+
+          if (memberCreationStatus === "fail") {
+            memberCreationFailureCount += 1;
+          }
+        }
+      }
+    }
+  } catch {
+    return {
+      ok: false,
+      message: "Unable to update the selected applications right now.",
+    };
+  }
+
+  if (affectedApplicationIds.length === 0) {
+    return {
+      ok: false,
+      message: "No selected applications could be found.",
+    };
+  }
+
+  revalidateMembershipApplicationPathsForIds(affectedApplicationIds);
+
+  return {
+    ok: true,
+    affectedCount: affectedApplicationIds.length,
+    memberCreationFailureCount,
+    message: buildBulkMembershipApplicationActionMessage({
+      action: parsedValues.data.action,
+      affectedCount: affectedApplicationIds.length,
+      memberCreationFailureCount,
+    }),
+  };
+}
+
+function getBulkMembershipApplicationStatus(
+  action: BulkMembershipApplicationAction,
+): MembershipApplicationStatus {
+  switch (action) {
+    case "approve":
+      return "approved";
+    case "reject":
+      return "rejected";
+    case "pending":
+      return "pending";
+    default:
+      return "pending";
+  }
+}
+
+function revalidateMembershipApplicationPathsForIds(applicationIds: string[]) {
+  revalidatePath("/admin/members/applications");
+  revalidatePath("/admin/members");
+
+  for (const applicationId of applicationIds) {
+    revalidatePath(`/admin/members/applications/${applicationId}`);
+  }
 }
 
 async function createMemberForApprovedApplication(applicationId: string) {

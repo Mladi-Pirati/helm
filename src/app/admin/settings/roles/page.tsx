@@ -1,16 +1,19 @@
 import { asc, eq } from "drizzle-orm";
 
+import { ApplicationsManagement } from "@/components/admin/roles/applications-management";
 import { ModulesManagement } from "@/components/admin/roles/modules-management";
 import { PermissionsManagement } from "@/components/admin/roles/permissions-management";
 import { RolesManagement } from "@/components/admin/roles/roles-management";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { db } from "@/db";
-import { modules, permissions, rolePermissions, roles } from "@/db/schema";
+import {
+  accessApplications,
+  memberApplicationAccess,
+  modules,
+  permissions,
+  rolePermissions,
+  roles,
+} from "@/db/schema";
 import { requirePermission } from "@/lib/auth/permissions";
 
 export default async function AdminRolesPage() {
@@ -51,6 +54,24 @@ export default async function AdminRolesPage() {
     .from(roles)
     .orderBy(asc(roles.rank));
 
+  const applicationRows = await db
+    .select({
+      archivedAt: accessApplications.archivedAt,
+      description: accessApplications.description,
+      id: accessApplications.id,
+      keycloakClientId: accessApplications.keycloakClientId,
+      keycloakRoleName: accessApplications.keycloakRoleName,
+      name: accessApplications.name,
+    })
+    .from(accessApplications)
+    .orderBy(asc(accessApplications.archivedAt), asc(accessApplications.name));
+
+  const applicationAccessRows = await db
+    .select({
+      applicationId: memberApplicationAccess.applicationId,
+    })
+    .from(memberApplicationAccess);
+
   const allRolePermissions = await db
     .select({
       roleId: rolePermissions.roleId,
@@ -70,6 +91,13 @@ export default async function AdminRolesPage() {
     key: p.key,
     moduleName: p.moduleName,
   }));
+  const assignedCountsByApplication = applicationAccessRows.reduce(
+    (counts, row) => {
+      counts.set(row.applicationId, (counts.get(row.applicationId) ?? 0) + 1);
+      return counts;
+    },
+    new Map<string, number>(),
+  );
 
   return (
     <div className="grid gap-6">
@@ -84,6 +112,7 @@ export default async function AdminRolesPage() {
           <TabsTrigger value="modules">Modules</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
+          <TabsTrigger value="applications">Applications</TabsTrigger>
         </TabsList>
         <TabsContent className="mt-4" value="modules">
           <ModulesManagement rows={modulesRows} />
@@ -98,6 +127,15 @@ export default async function AdminRolesPage() {
           <RolesManagement
             permissions={permissionOptions}
             rows={rolesWithPermissions}
+          />
+        </TabsContent>
+        <TabsContent className="mt-4" value="applications">
+          <ApplicationsManagement
+            rows={applicationRows.map((row) => ({
+              ...row,
+              archivedAt: row.archivedAt?.toISOString() ?? null,
+              assignedMemberCount: assignedCountsByApplication.get(row.id) ?? 0,
+            }))}
           />
         </TabsContent>
       </Tabs>

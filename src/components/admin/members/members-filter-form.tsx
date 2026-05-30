@@ -5,46 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
-  NO_ROLES_MEMBER_ROLE_FILTER,
   buildMembersFilterHref,
-  type MemberListStatus,
   type MembersListFilters,
 } from "@/lib/members";
 
-type RoleOption = {
-  id: string;
-  name: string;
-};
-
-function FilterSelect({
-  children,
-  name,
-  onChange,
-  value,
-}: {
-  children: React.ReactNode;
-  name: string;
-  onChange: React.ChangeEventHandler<HTMLSelectElement>;
-  value: string;
-}) {
-  return (
-    <select
-      className="h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-      name={name}
-      onChange={onChange}
-      value={value}
-    >
-      {children}
-    </select>
-  );
-}
-
 export function MembersFilterForm({
   filters,
-  roleOptions,
 }: {
   filters: MembersListFilters;
-  roleOptions: RoleOption[];
 }) {
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,7 +20,7 @@ export function MembersFilterForm({
   const [query, setQuery] = useState(filters.q);
 
   const applyFilters = useCallback(
-    (updates: Partial<Pick<MembersListFilters, "q" | "roleId" | "status">>) => {
+    (updates: Partial<Pick<MembersListFilters, "q">>) => {
       const baseFilters = {
         ...currentFilters,
         q: query,
@@ -97,7 +65,7 @@ export function MembersFilterForm({
 
   return (
     <form
-      className="grid gap-3 rounded-none border p-4 md:grid-cols-4"
+      className="grid gap-3 rounded-none border p-4 md:grid-cols-2"
       onSubmit={submitSearch}
     >
       <input
@@ -108,30 +76,6 @@ export function MembersFilterForm({
         type="search"
         value={query}
       />
-      <FilterSelect
-        name="status"
-        onChange={(event) =>
-          applyFilters({ status: event.target.value as MemberListStatus })
-        }
-        value={currentFilters.status}
-      >
-        <option value="active">Active members</option>
-        <option value="disabled">Disabled members</option>
-        <option value="all">All members</option>
-      </FilterSelect>
-      <FilterSelect
-        name="roleId"
-        onChange={(event) => applyFilters({ roleId: event.target.value })}
-        value={currentFilters.roleId}
-      >
-        <option value="">All roles</option>
-        <option value={NO_ROLES_MEMBER_ROLE_FILTER}>No roles</option>
-        {roleOptions.map((role) => (
-          <option key={role.id} value={role.id}>
-            {role.name}
-          </option>
-        ))}
-      </FilterSelect>
     </form>
   );
 }

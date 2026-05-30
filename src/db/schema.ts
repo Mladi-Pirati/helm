@@ -32,7 +32,12 @@ export const memberCreationStatusEnum = pgEnum(
   MEMBER_CREATION_STATUSES,
 );
 
-export const ADDRESS_LABELS = ["primary", "temporary", "work", "other"] as const;
+export const ADDRESS_LABELS = [
+  "primary",
+  "temporary",
+  "work",
+  "other",
+] as const;
 export type AddressLabel = (typeof ADDRESS_LABELS)[number];
 
 export const CONTACT_TYPES = [
@@ -80,10 +85,8 @@ export const mladiPiratiMembershipApplications = pgTable(
     participationMode: text("participation_mode").notNull(),
     discordUsername: text("discord_username"),
     motivation: text("motivation"),
-    consentsToDataProcessing: boolean("consents_to_data_processing")
-      .notNull(),
-    acceptsStatuteAndProgram: boolean("accepts_statute_and_program")
-      .notNull(),
+    consentsToDataProcessing: boolean("consents_to_data_processing").notNull(),
+    acceptsStatuteAndProgram: boolean("accepts_statute_and_program").notNull(),
     status: membershipApplicationStatusEnum("status")
       .notNull()
       .default("pending"),
@@ -111,9 +114,7 @@ export const members = pgTable(
     disabledAt: timestamp("disabled_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
   },
-  (table) => [
-    uniqueIndex("members_keycloak_id_unique").on(table.keycloakId),
-  ],
+  (table) => [uniqueIndex("members_keycloak_id_unique").on(table.keycloakId)],
 );
 
 export const addresses = pgTable(
@@ -238,20 +239,17 @@ export const permissions = pgTable(
   ],
 );
 
-export const roles = pgTable(
-  "roles",
-  {
-    id: text("id")
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
-    key: text("key").notNull().unique(),
-    name: text("name").notNull(),
-    description: text("description"),
-    rank: integer("rank").notNull().unique(),
-    isSystem: boolean("is_system").notNull().default(false),
-    ...timestamps,
-  },
-);
+export const roles = pgTable("roles", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  rank: integer("rank").notNull().unique(),
+  isSystem: boolean("is_system").notNull().default(false),
+  ...timestamps,
+});
 
 export const rolePermissions = pgTable(
   "role_permissions",
@@ -308,6 +306,65 @@ export const memberRoles = pgTable(
       foreignColumns: [members.id],
       name: "member_roles_granted_by_members_id_fk",
     }).onDelete("set null"),
+  ],
+);
+
+export const accessApplications = pgTable(
+  "access_applications",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    description: text("description"),
+    keycloakClientId: text("keycloak_client_id").notNull(),
+    keycloakRoleName: text("keycloak_role_name").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("access_applications_active_name_unique")
+      .on(table.name)
+      .where(sql`${table.archivedAt} is null`),
+    uniqueIndex("access_applications_active_keycloak_role_unique")
+      .on(table.keycloakClientId, table.keycloakRoleName)
+      .where(sql`${table.archivedAt} is null`),
+  ],
+);
+
+export const memberApplicationAccess = pgTable(
+  "member_application_access",
+  {
+    memberId: text("member_id").notNull(),
+    applicationId: text("application_id").notNull(),
+    grantedBy: text("granted_by"),
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.memberId, table.applicationId],
+      name: "member_application_access_pkey",
+    }),
+    foreignKey({
+      columns: [table.memberId],
+      foreignColumns: [members.id],
+      name: "member_application_access_member_id_members_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.applicationId],
+      foreignColumns: [accessApplications.id],
+      name: "member_application_access_application_id_access_applications_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.grantedBy],
+      foreignColumns: [members.id],
+      name: "member_application_access_granted_by_members_id_fk",
+    }).onDelete("set null"),
+    index("member_application_access_application_id_idx").on(
+      table.applicationId,
+    ),
   ],
 );
 
@@ -386,7 +443,8 @@ export type NewMembershipApplication =
   typeof mladiPiratiMembershipApplications.$inferInsert;
 export type Newsletter = typeof newsletters.$inferSelect;
 export type NewNewsletter = typeof newsletters.$inferInsert;
-export type NewsletterSubscription = typeof newsletterSubscriptions.$inferSelect;
+export type NewsletterSubscription =
+  typeof newsletterSubscriptions.$inferSelect;
 export type NewNewsletterSubscription =
   typeof newsletterSubscriptions.$inferInsert;
 export type ApiRateLimitWindow = typeof apiRateLimitWindows.$inferSelect;

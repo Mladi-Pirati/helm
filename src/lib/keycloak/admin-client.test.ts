@@ -14,9 +14,7 @@ type RecordedRequest = {
   url?: string;
 };
 
-function createAdapter(
-  handler: (config: AxiosRequestConfig) => unknown,
-): {
+function createAdapter(handler: (config: AxiosRequestConfig) => unknown): {
   adapter: AxiosAdapter;
   requests: RecordedRequest[];
 } {
@@ -130,8 +128,7 @@ describe("Keycloak admin client", () => {
         return {
           ...response,
           headers: {
-            location:
-              "https://sso.example.test/admin/realms/demo/users/user-1",
+            location: "https://sso.example.test/admin/realms/demo/users/user-1",
           },
           status: 201,
           statusText: "Created",
@@ -217,7 +214,9 @@ describe("Keycloak admin client", () => {
       { adapter },
     );
 
-    await expect(client.findUserByEmail("Ana@Example.Test")).resolves.toMatchObject({
+    await expect(
+      client.findUserByEmail("Ana@Example.Test"),
+    ).resolves.toMatchObject({
       id: "user-1",
       username: "ana.novak",
     });
@@ -285,6 +284,42 @@ describe("Keycloak admin client", () => {
     ]);
   });
 
+  test("deletes a Keycloak user", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.method === "delete") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.deleteUser("user-1");
+
+    const deleteRequest = requests.find(
+      (request) => request.method === "delete",
+    );
+    expect(deleteRequest?.url).toBe(
+      "https://sso.example.test/admin/realms/demo/users/user-1",
+    );
+    expect(deleteRequest?.data).toBeUndefined();
+  });
+
   test("fetches all users across paginated responses", async () => {
     const { adapter, requests } = createAdapter((config) => {
       if (config.url?.endsWith("/protocol/openid-connect/token")) {
@@ -293,9 +328,9 @@ describe("Keycloak admin client", () => {
 
       if (config.url?.endsWith("/admin/realms/demo/users")) {
         if ((config.params as { first: number }).first === 0) {
-        return [
-          { id: "1", username: "ana", firstName: "Ana", lastName: "Novak" },
-        ];
+          return [
+            { id: "1", username: "ana", firstName: "Ana", lastName: "Novak" },
+          ];
         }
 
         return [];
@@ -353,7 +388,11 @@ describe("Keycloak admin client", () => {
         return [];
       }
 
-      if (config.url?.endsWith("/admin/realms/demo/clients/client-uuid/roles/user")) {
+      if (
+        config.url?.endsWith(
+          "/admin/realms/demo/clients/client-uuid/roles/user",
+        )
+      ) {
         return { id: "role-id", name: "user" };
       }
 
@@ -388,6 +427,127 @@ describe("Keycloak admin client", () => {
     );
     expect(JSON.parse(String(grantRequest?.data))).toEqual([
       { id: "role-id", name: "user" },
+    ]);
+  });
+
+  test("lists Keycloak clients and roles for application configuration", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/clients")) {
+        return [
+          { id: "client-uuid", clientId: "forum" },
+          { id: "other-client-uuid", clientId: "wiki" },
+        ];
+      }
+
+      if (
+        config.url?.endsWith("/admin/realms/demo/clients/client-uuid/roles")
+      ) {
+        return [
+          { id: "member-role-id", name: "member" },
+          { id: "admin-role-id", name: "admin" },
+        ];
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await expect(client.searchClients("forum")).resolves.toEqual([
+      { id: "client-uuid", clientId: "forum" },
+      { id: "other-client-uuid", clientId: "wiki" },
+    ]);
+    await expect(client.listRolesForClient("forum")).resolves.toEqual([
+      { id: "member-role-id", name: "member" },
+      { id: "admin-role-id", name: "admin" },
+    ]);
+
+    expect(
+      requests
+        .filter((request) =>
+          request.url?.endsWith("/admin/realms/demo/clients"),
+        )
+        .map((request) => request.params),
+    ).toEqual([
+      { clientId: "forum", first: 0, max: 20 },
+      { clientId: "forum" },
+    ]);
+  });
+
+  test("grants and removes a specific role on an arbitrary client", async () => {
+    const { adapter, requests } = createAdapter((config) => {
+      if (config.url?.endsWith("/protocol/openid-connect/token")) {
+        return { access_token: "token" };
+      }
+
+      if (config.url?.endsWith("/admin/realms/demo/clients")) {
+        return [{ id: "forum-client-uuid", clientId: "forum" }];
+      }
+
+      if (
+        config.url?.endsWith(
+          "/admin/realms/demo/clients/forum-client-uuid/roles/member",
+        )
+      ) {
+        return { id: "member-role-id", name: "member" };
+      }
+
+      if (config.method === "post" || config.method === "delete") {
+        return {};
+      }
+
+      throw new Error(`Unexpected request ${config.method} ${config.url}`);
+    });
+
+    const client = createKeycloakAdminClient(
+      {
+        adminBaseUrl: "https://sso.example.test/admin/realms/demo",
+        clientId: "applications",
+        clientSecret: "secret",
+        defaultClientRoleName: "user",
+        issuer: "https://sso.example.test/realms/demo",
+        realm: "demo",
+      },
+      { adapter },
+    );
+
+    await client.addClientRole("user-1", {
+      clientId: "forum",
+      roleName: "member",
+    });
+    await client.removeClientRole("user-1", {
+      clientId: "forum",
+      roleName: "member",
+    });
+
+    const roleMappingRequests = requests.filter((request) =>
+      request.url?.endsWith(
+        "/admin/realms/demo/users/user-1/role-mappings/clients/forum-client-uuid",
+      ),
+    );
+    expect(roleMappingRequests.map((request) => request.method)).toEqual([
+      "post",
+      "delete",
+    ]);
+    expect(
+      roleMappingRequests.map((request) => JSON.parse(String(request.data))),
+    ).toEqual([
+      [{ id: "member-role-id", name: "member" }],
+      [{ id: "member-role-id", name: "member" }],
     ]);
   });
 
@@ -600,9 +760,7 @@ describe("Keycloak admin client", () => {
       username: "ana",
     });
 
-    const updateRequest = requests.find(
-      (request) => request.method === "put",
-    );
+    const updateRequest = requests.find((request) => request.method === "put");
     expect(updateRequest?.url).toBe(
       "https://sso.example.test/admin/realms/demo/users/user-1",
     );
@@ -665,9 +823,7 @@ describe("Keycloak admin client", () => {
       username: "ana",
     });
 
-    const updateRequest = requests.find(
-      (request) => request.method === "put",
-    );
+    const updateRequest = requests.find((request) => request.method === "put");
     expect(JSON.parse(String(updateRequest?.data)).emailVerified).toBe(true);
   });
 });

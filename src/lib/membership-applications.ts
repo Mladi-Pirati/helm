@@ -54,6 +54,16 @@ export const reviewMembershipApplicationStatuses = [
 export type ReviewMembershipApplicationStatus =
   (typeof reviewMembershipApplicationStatuses)[number];
 
+export const bulkMembershipApplicationActions = [
+  "approve",
+  "reject",
+  "pending",
+  "delete",
+] as const;
+
+export type BulkMembershipApplicationAction =
+  (typeof bulkMembershipApplicationActions)[number];
+
 export type MembershipApplicationsSearchParams = {
   q?: string | string[] | undefined;
   status?: string | string[] | undefined;
@@ -147,6 +157,62 @@ export function hasValidRejectionReason(value: string) {
 
 export function formatPendingMembershipApplicationCount(count: number) {
   return count > 99 ? "99+" : count.toString();
+}
+
+export function dedupeMembershipApplicationIds(applicationIds: string[]) {
+  return Array.from(
+    new Set(
+      applicationIds
+        .map((applicationId) => applicationId.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
+}
+
+export function buildBulkMembershipApplicationActionMessage({
+  action,
+  affectedCount,
+  memberCreationFailureCount,
+}: {
+  action: BulkMembershipApplicationAction;
+  affectedCount: number;
+  memberCreationFailureCount: number;
+}) {
+  const applicationNoun = pluralize(
+    affectedCount,
+    "application",
+    "applications",
+  );
+
+  switch (action) {
+    case "approve": {
+      const baseMessage = `Approved ${affectedCount} ${applicationNoun}.`;
+
+      if (memberCreationFailureCount <= 0) {
+        return baseMessage;
+      }
+
+      const profileNoun = pluralize(
+        memberCreationFailureCount,
+        "member profile needs",
+        "member profiles need",
+      );
+
+      return `${baseMessage} ${memberCreationFailureCount} ${profileNoun} retry.`;
+    }
+    case "reject":
+      return `Rejected ${affectedCount} ${applicationNoun}.`;
+    case "pending":
+      return `Set ${affectedCount} ${applicationNoun} back to pending.`;
+    case "delete":
+      return `Deleted ${affectedCount} ${applicationNoun}.`;
+    default:
+      return `Updated ${affectedCount} ${applicationNoun}.`;
+  }
 }
 
 export function getMembershipApplicationStatusVariant(

@@ -1,9 +1,111 @@
 {
-  "id": "a06c9fd1-b9f9-4ccf-b952-6f5adc354532",
-  "prevId": "f761405d-26e8-42f1-8ba9-8890a1af2454",
+  "id": "60fc387f-342f-4eb3-920c-a2fbbf018c54",
+  "prevId": "a06c9fd1-b9f9-4ccf-b952-6f5adc354532",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.access_applications": {
+      "name": "access_applications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "keycloak_client_id": {
+          "name": "keycloak_client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "keycloak_role_name": {
+          "name": "keycloak_role_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "access_applications_active_name_unique": {
+          "name": "access_applications_active_name_unique",
+          "columns": [
+            {
+              "expression": "name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_applications\".\"archived_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "access_applications_active_keycloak_role_unique": {
+          "name": "access_applications_active_keycloak_role_unique",
+          "columns": [
+            {
+              "expression": "keycloak_client_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "keycloak_role_name",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"access_applications\".\"archived_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.addresses": {
       "name": "addresses",
       "schema": "",
@@ -291,6 +393,108 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.member_application_access": {
+      "name": "member_application_access",
+      "schema": "",
+      "columns": {
+        "member_id": {
+          "name": "member_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "application_id": {
+          "name": "application_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "granted_by": {
+          "name": "granted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "granted_at": {
+          "name": "granted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "member_application_access_application_id_idx": {
+          "name": "member_application_access_application_id_idx",
+          "columns": [
+            {
+              "expression": "application_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "member_application_access_member_id_members_id_fk": {
+          "name": "member_application_access_member_id_members_id_fk",
+          "tableFrom": "member_application_access",
+          "tableTo": "members",
+          "columnsFrom": [
+            "member_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "member_application_access_application_id_access_applications_id_fk": {
+          "name": "member_application_access_application_id_access_applications_id_fk",
+          "tableFrom": "member_application_access",
+          "tableTo": "access_applications",
+          "columnsFrom": [
+            "application_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "member_application_access_granted_by_members_id_fk": {
+          "name": "member_application_access_granted_by_members_id_fk",
+          "tableFrom": "member_application_access",
+          "tableTo": "members",
+          "columnsFrom": [
+            "granted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "member_application_access_pkey": {
+          "name": "member_application_access_pkey",
+          "columns": [
+            "member_id",
+            "application_id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -668,6 +872,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "member_creation_status": {
+          "name": "member_creation_status",
+          "type": "member_creation_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
         "raw_payload": {
           "name": "raw_payload",
           "type": "jsonb",
@@ -688,13 +899,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "member_creation_status": {
-          "name": "member_creation_status",
-          "type": "member_creation_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},
@@ -1191,6 +1395,14 @@
         "website"
       ]
     },
+    "public.member_creation_status": {
+      "name": "member_creation_status",
+      "schema": "public",
+      "values": [
+        "success",
+        "fail"
+      ]
+    },
     "public.membership_application_status": {
       "name": "membership_application_status",
       "schema": "public",
@@ -1198,14 +1410,6 @@
         "pending",
         "approved",
         "rejected"
-      ]
-    },
-    "public.member_creation_status": {
-      "name": "member_creation_status",
-      "schema": "public",
-      "values": [
-        "success",
-        "fail"
       ]
     }
   },

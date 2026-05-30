@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray, max } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/db";
 import {
   addresses,
   contacts,
@@ -14,9 +13,13 @@ import {
   roles,
   type ContactType,
 } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth/session";
-import { hasPermission } from "@/lib/auth/permissions";
-import { createKeycloakAdminClient } from "@/lib/keycloak/admin-client";
+import {
+  createMembersKeycloakAdminClient,
+  db,
+  getCurrentUser,
+  hasPermission,
+  syncMemberApplicationRoles,
+} from "@/lib/members-action-dependencies";
 import {
   memberHasActiveRole,
   roleGrantsAnyPermission,
@@ -60,6 +63,12 @@ const searchKeycloakUsersSchema = z.object({
 const roleAssignmentsSchema = z.object({
   assignments: z.array(roleAssignmentSchema),
 });
+
+const deleteMemberSchema = z.object({
+  mode: z.enum(["local", "local-and-keycloak", "local-and-revoke-helm"]),
+});
+
+export type DeleteMemberMode = z.infer<typeof deleteMemberSchema>["mode"];
 
 type MembersSyncLogDetails = Record<
   string,
@@ -225,7 +234,7 @@ async function getKeycloakUserForMemberSync(member: {
   keycloakId: string;
   username: string;
 }) {
-  const keycloak = createKeycloakAdminClient();
+  const keycloak = createMembersKeycloakAdminClient();
 
   try {
     logMembersSyncEvent("info", "Fetching Keycloak user by stored id.", {
@@ -253,14 +262,20 @@ async function getKeycloakUserForMemberSync(member: {
   });
 
   const users = await keycloak.searchUsersByUsername(member.username);
-  const matchingUsers = users.filter((user) => user.username === member.username);
+  const matchingUsers = users.filter(
+    (user) => user.username === member.username,
+  );
 
   if (matchingUsers.length !== 1) {
-    logMembersSyncEvent("error", "Keycloak username fallback did not resolve exactly one user.", {
-      matchCount: matchingUsers.length,
-      memberId: member.id,
-      username: member.username,
-    });
+    logMembersSyncEvent(
+      "error",
+      "Keycloak username fallback did not resolve exactly one user.",
+      {
+        matchCount: matchingUsers.length,
+        memberId: member.id,
+        username: member.username,
+      },
+    );
     throw new Error(
       `Keycloak user not found by id and username fallback matched ${matchingUsers.length} users.`,
     );
@@ -272,12 +287,16 @@ async function getKeycloakUserForMemberSync(member: {
     .set({ keycloakId: keycloakUser.id })
     .where(eq(members.id, member.id));
 
-  logMembersSyncEvent("info", "Relinked member to Keycloak user found by username.", {
-    keycloakId: keycloakUser.id,
-    memberId: member.id,
-    previousKeycloakId: member.keycloakId,
-    username: member.username,
-  });
+  logMembersSyncEvent(
+    "info",
+    "Relinked member to Keycloak user found by username.",
+    {
+      keycloakId: keycloakUser.id,
+      memberId: member.id,
+      previousKeycloakId: member.keycloakId,
+      username: member.username,
+    },
+  );
 
   return {
     keycloakUser,
@@ -302,7 +321,7 @@ async function syncKeycloakClientAccess(values: {
   hasActiveRole: boolean;
   keycloakId: string;
 }) {
-  const keycloak = createKeycloakAdminClient();
+  const keycloak = createMembersKeycloakAdminClient();
 
   if (values.disabled || !values.hasActiveRole) {
     await keycloak.removeAllClientRoles(values.keycloakId);
@@ -391,7 +410,9 @@ export async function searchKeycloakUsersAction(query: string): Promise<
   if (!parsed.success) return { ok: true, users: [] };
 
   try {
-    const users = await createKeycloakAdminClient().searchUsers(parsed.data.q);
+    const users = await createMembersKeycloakAdminClient().searchUsers(
+      parsed.data.q,
+    );
     return { ok: true, users };
   } catch {
     return {
@@ -403,7 +424,9 @@ export async function searchKeycloakUsersAction(query: string): Promise<
 
 export async function createMemberAction(
   values: CreateMemberInput,
-): Promise<ActionResult<ActionSuccess & { memberId: string }, keyof CreateMemberInput>> {
+): Promise<
+  ActionResult<ActionSuccess & { memberId: string }, keyof CreateMemberInput>
+> {
   const access = await requireMembersPermission("members.create");
   if (!access.ok) return access;
 
@@ -424,7 +447,7 @@ export async function createMemberAction(
   }
 
   try {
-    const keycloakUser = await createKeycloakAdminClient().getUser(
+    const keycloakUser = await createMembersKeycloakAdminClient().getUser(
       parsed.data.keycloakId,
     );
     const [member] = await db.transaction(async (tx) => {
@@ -498,12 +521,15 @@ export async function updateMemberProfileAction(
   if (!member) return { ok: false, message: "That member could not be found." };
 
   try {
-    await createKeycloakAdminClient().updateUserProfile(member.keycloakId, {
-      email: parsed.data.primaryEmail,
-      firstName: parsed.data.firstName,
-      lastName: parsed.data.lastName,
-      username: parsed.data.username,
-    });
+    await createMembersKeycloakAdminClient().updateUserProfile(
+      member.keycloakId,
+      {
+        email: parsed.data.primaryEmail,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        username: parsed.data.username,
+      },
+    );
   } catch {
     return {
       ok: false,
@@ -607,7 +633,10 @@ export async function setMemberDisabledAction(
 
   const currentMemberId = await getCurrentMemberId();
   if (disabled && currentMemberId === memberId) {
-    return { ok: false, message: "You cannot disable your own member account." };
+    return {
+      ok: false,
+      message: "You cannot disable your own member account.",
+    };
   }
 
   const member = await getMemberIdentity(memberId);
@@ -619,10 +648,16 @@ export async function setMemberDisabledAction(
       hasActiveRole: disabled ? false : await memberHasActiveRole(memberId),
       keycloakId: member.keycloakId,
     });
+    await syncMemberApplicationRoles({
+      disabled,
+      keycloakId: member.keycloakId,
+      memberId,
+    });
   } catch {
     return {
       ok: false,
-      message: "Keycloak access could not be updated. Local status was not changed.",
+      message:
+        "Keycloak access could not be updated. Local status was not changed.",
     };
   }
 
@@ -636,6 +671,64 @@ export async function setMemberDisabledAction(
     ok: true,
     message: disabled ? "Member disabled." : "Member re-enabled.",
   };
+}
+
+export async function deleteMemberAction(
+  memberId: string,
+  mode: DeleteMemberMode,
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.delete");
+  if (!access.ok) return access;
+
+  const parsed = deleteMemberSchema.safeParse({ mode });
+  if (!parsed.success) {
+    return { ok: false, message: "Please choose a valid delete option." };
+  }
+
+  const currentMemberId = await getCurrentMemberId();
+  if (currentMemberId === memberId) {
+    return {
+      ok: false,
+      message: "You cannot delete your own member account.",
+    };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  try {
+    if (parsed.data.mode === "local-and-keycloak") {
+      await createMembersKeycloakAdminClient().deleteUser(member.keycloakId);
+    } else if (parsed.data.mode === "local-and-revoke-helm") {
+      const keycloak = createMembersKeycloakAdminClient();
+      await keycloak.removeAllClientRoles(member.keycloakId);
+      await syncMemberApplicationRoles({
+        disabled: true,
+        keycloakId: member.keycloakId,
+        memberId,
+      });
+    }
+  } catch (error) {
+    logMembersSyncEvent(
+      "error",
+      "Keycloak cleanup before member delete failed.",
+      {
+        keycloakId: member.keycloakId,
+        memberId,
+        mode: parsed.data.mode,
+        ...getErrorLogDetails(error),
+      },
+    );
+    return {
+      ok: false,
+      message: "Keycloak could not be updated. Member was not deleted.",
+    };
+  }
+
+  await db.delete(members).where(eq(members.id, memberId));
+
+  revalidateMembers(memberId);
+  return { ok: true, message: "Member deleted." };
 }
 
 export async function upsertContactAction(
@@ -665,16 +758,20 @@ export async function upsertContactAction(
 
   if (parsed.data.type === "email" && parsed.data.isPrimary) {
     try {
-      await createKeycloakAdminClient().updateUserProfile(member.keycloakId, {
-        email: parsed.data.value,
-        firstName: member.firstName,
-        lastName: member.lastName,
-        username: member.username,
-      });
+      await createMembersKeycloakAdminClient().updateUserProfile(
+        member.keycloakId,
+        {
+          email: parsed.data.value,
+          firstName: member.firstName,
+          lastName: member.lastName,
+          username: member.username,
+        },
+      );
     } catch {
       return {
         ok: false,
-        message: "Keycloak email could not be updated. Local data was not changed.",
+        message:
+          "Keycloak email could not be updated. Local data was not changed.",
       };
     }
   }
@@ -696,7 +793,9 @@ export async function upsertContactAction(
       await tx
         .update(contacts)
         .set(parsed.data)
-        .where(and(eq(contacts.id, contactId), eq(contacts.memberId, memberId)));
+        .where(
+          and(eq(contacts.id, contactId), eq(contacts.memberId, memberId)),
+        );
       return;
     }
 
@@ -801,7 +900,9 @@ export async function upsertAddressAction(
     await db
       .update(addresses)
       .set(parsed.data)
-      .where(and(eq(addresses.id, addressId), eq(addresses.memberId, memberId)));
+      .where(
+        and(eq(addresses.id, addressId), eq(addresses.memberId, memberId)),
+      );
   } else {
     await db.insert(addresses).values({ ...parsed.data, memberId });
   }
@@ -867,7 +968,9 @@ export async function endMembershipAction(
   const [membership] = await db
     .select({ id: memberships.id })
     .from(memberships)
-    .where(and(eq(memberships.id, membershipId), eq(memberships.memberId, memberId)))
+    .where(
+      and(eq(memberships.id, membershipId), eq(memberships.memberId, memberId)),
+    )
     .limit(1);
 
   if (!membership) {
@@ -898,7 +1001,9 @@ export async function updateMemberRolesAction(
   const member = await getMemberIdentity(memberId);
   if (!member) return { ok: false, message: "That member could not be found." };
 
-  const roleIds = parsed.data.assignments.map((assignment) => assignment.roleId);
+  const roleIds = parsed.data.assignments.map(
+    (assignment) => assignment.roleId,
+  );
   if (roleIds.length) {
     const existingRoles = await db
       .select({ id: roles.id })
@@ -952,14 +1057,19 @@ export async function updateMemberRolesAction(
       });
     });
   } catch (error) {
-    logMembersSyncEvent("error", "Keycloak access sync after role update failed.", {
-      keycloakId: member.keycloakId,
-      memberId,
-      ...getErrorLogDetails(error),
-    });
+    logMembersSyncEvent(
+      "error",
+      "Keycloak access sync after role update failed.",
+      {
+        keycloakId: member.keycloakId,
+        memberId,
+        ...getErrorLogDetails(error),
+      },
+    );
     return {
       ok: false,
-      message: "Keycloak access could not be updated. Member roles were not changed.",
+      message:
+        "Keycloak access could not be updated. Member roles were not changed.",
     };
   }
 

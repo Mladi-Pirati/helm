@@ -92,6 +92,13 @@
       "when": 1780074000000,
       "tag": "0013_member_creation_status",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780075587206,
+      "tag": "0013_same_meltdown",
+      "breakpoints": true
     }
   ]
 }
