@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
+  MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
+  buildMembershipApplicationsFilterHref,
+  buildMembershipApplicationsListHref,
+  buildMembershipApplicationsQueryString,
   buildBulkMembershipApplicationActionMessage,
   dedupeMembershipApplicationIds,
   formatPendingMembershipApplicationCount,
@@ -34,7 +39,9 @@ describe("pending membership application count", () => {
 
 describe("membership application list filters", () => {
   test("defaults status filtering to pending when status is absent", () => {
-    expect(parseMembershipApplicationsFilters({})).toMatchObject({
+    expect(parseMembershipApplicationsFilters({})).toEqual({
+      page: 1,
+      pageSize: DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
       q: "",
       status: "pending",
     });
@@ -45,6 +52,70 @@ describe("membership application list filters", () => {
       q: "",
       status: undefined,
     });
+  });
+
+  test("trims text filters and clamps invalid pagination", () => {
+    expect(
+      parseMembershipApplicationsFilters({
+        page: "-4",
+        pageSize: String(MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE + 500),
+        q: "  ana  ",
+        status: "approved",
+      }),
+    ).toEqual({
+      page: 1,
+      pageSize: MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
+      q: "ana",
+      status: "approved",
+    });
+  });
+
+  test("builds query strings with pagination and drops defaults", () => {
+    expect(
+      buildMembershipApplicationsQueryString({
+        page: 1,
+        pageSize: DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
+        q: "",
+        status: "pending",
+      }),
+    ).toBe("");
+
+    expect(
+      buildMembershipApplicationsQueryString({
+        page: 3,
+        pageSize: 25,
+        q: "ana",
+        status: undefined,
+      }),
+    ).toBe("q=ana&status=&page=3&pageSize=25");
+  });
+
+  test("builds list hrefs and resets pagination for filter changes", () => {
+    expect(
+      buildMembershipApplicationsListHref({
+        page: 2,
+        pageSize: 25,
+        q: "ana",
+        status: "rejected",
+      }),
+    ).toBe(
+      "/admin/members/applications?q=ana&status=rejected&page=2&pageSize=25",
+    );
+
+    expect(
+      buildMembershipApplicationsFilterHref(
+        {
+          page: 4,
+          pageSize: 25,
+          q: "ana",
+          status: "approved",
+        },
+        {
+          q: "",
+          status: "pending",
+        },
+      ),
+    ).toBe("/admin/members/applications?pageSize=25");
   });
 });
 

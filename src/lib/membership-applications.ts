@@ -64,12 +64,19 @@ export const bulkMembershipApplicationActions = [
 export type BulkMembershipApplicationAction =
   (typeof bulkMembershipApplicationActions)[number];
 
+export const DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE = 50;
+export const MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE = 100;
+
 export type MembershipApplicationsSearchParams = {
+  page?: string | string[] | undefined;
+  pageSize?: string | string[] | undefined;
   q?: string | string[] | undefined;
   status?: string | string[] | undefined;
 };
 
 export type MembershipApplicationsListFilters = {
+  page: number;
+  pageSize: number;
   q: string;
   status?: MembershipApplicationStatus;
 };
@@ -78,6 +85,13 @@ function getSingleSearchParam(
   value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number) {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return parsed;
 }
 
 export function isMembershipApplicationStatus(
@@ -91,10 +105,18 @@ export function isMembershipApplicationStatus(
 export function parseMembershipApplicationsFilters(
   rawSearchParams: MembershipApplicationsSearchParams,
 ): MembershipApplicationsListFilters {
+  const rawPage = getSingleSearchParam(rawSearchParams.page);
+  const rawPageSize = getSingleSearchParam(rawSearchParams.pageSize);
+  const pageSize = parsePositiveInt(
+    rawPageSize,
+    DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
+  );
   const q = getSingleSearchParam(rawSearchParams.q)?.trim() ?? "";
   const status = getSingleSearchParam(rawSearchParams.status);
 
   return {
+    page: parsePositiveInt(rawPage, 1),
+    pageSize: Math.min(pageSize, MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE),
     q,
     status:
       status === undefined
@@ -114,17 +136,42 @@ export function buildMembershipApplicationsQueryString(
     searchParams.set("q", filters.q);
   }
 
-  if (filters.status) {
+  if (filters.status === undefined) {
+    searchParams.set("status", "");
+  } else if (filters.status !== "pending") {
     searchParams.set("status", filters.status);
+  }
+
+  if (filters.page > 1) {
+    searchParams.set("page", String(filters.page));
+  }
+
+  if (filters.pageSize !== DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE) {
+    searchParams.set("pageSize", String(filters.pageSize));
   }
 
   return searchParams.toString();
 }
 
-export function buildMembershipApplicationsListHref(queryString: string) {
+export function buildMembershipApplicationsListHref(
+  filters: MembershipApplicationsListFilters,
+) {
+  const queryString = buildMembershipApplicationsQueryString(filters);
+
   return queryString
     ? `/admin/members/applications?${queryString}`
     : "/admin/members/applications";
+}
+
+export function buildMembershipApplicationsFilterHref(
+  filters: MembershipApplicationsListFilters,
+  updates: Partial<Pick<MembershipApplicationsListFilters, "q" | "status">>,
+) {
+  return buildMembershipApplicationsListHref({
+    ...filters,
+    ...updates,
+    page: 1,
+  });
 }
 
 export function buildMembershipApplicationDetailsHref(

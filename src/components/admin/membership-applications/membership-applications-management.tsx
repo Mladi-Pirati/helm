@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   flexRender,
   getCoreRowModel,
@@ -9,6 +10,7 @@ import {
   type ColumnDef,
   type RowSelectionState,
 } from "@tanstack/react-table";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +54,11 @@ export type MembershipApplicationListRow = {
   createdAt: string;
 };
 
+type PageSizeOption = {
+  href: string;
+  value: number;
+};
+
 function formatDateTime(value: string) {
   return formatSlovenianDateTime(new Date(value));
 }
@@ -64,18 +71,39 @@ function getApplicationDisplayName(
 
 export function MembershipApplicationsManagement({
   canDelete,
+  nextPageHref,
+  page,
+  pageCount,
+  pageSize,
+  pageSizeOptions,
+  previousPageHref,
   queryString,
   rows,
+  totalCount,
 }: {
   canDelete: boolean;
+  nextPageHref: string;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  pageSizeOptions: PageSizeOption[];
+  previousPageHref: string;
   queryString: string;
   rows: MembershipApplicationListRow[];
+  totalCount: number;
 }) {
+  const router = useRouter();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    setRowSelection({});
+  }, [rows]);
+
   const columns: ColumnDef<MembershipApplicationListRow>[] = [
     {
       id: "select",
@@ -157,7 +185,9 @@ export function MembershipApplicationsManagement({
       header: "Status",
       size: 140,
       cell: ({ row }) => (
-        <Badge variant={getMembershipApplicationStatusVariant(row.original.status)}>
+        <Badge
+          variant={getMembershipApplicationStatusVariant(row.original.status)}
+        >
           {membershipApplicationStatusLabels[row.original.status]}
         </Badge>
       ),
@@ -212,6 +242,13 @@ export function MembershipApplicationsManagement({
   const selectedRows = table
     .getSelectedRowModel()
     .rows.map((row) => row.original);
+  const tableRows = table.getRowModel().rows;
+  const rowVirtualizer = useVirtualizer({
+    count: tableRows.length,
+    estimateSize: () => 48,
+    getScrollElement: () => scrollContainerRef.current,
+    overscan: 8,
+  });
   const selectedCount = selectedRows.length;
   const hasSelection = selectedCount > 0;
   const handleBulkSuccess = (message: string) => {
@@ -308,13 +345,19 @@ export function MembershipApplicationsManagement({
             ) : null}
           </div>
         </div>
-        {table.getRowModel().rows.length ? (
+        <div
+          className="max-h-[70vh] overflow-auto"
+          ref={scrollContainerRef}
+        >
           <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="font-extrabold" style={{ width: header.getSize() }}>
+                    <TableHead
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                    >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -326,23 +369,92 @@ export function MembershipApplicationsManagement({
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} style={{ width: cell.column.getSize() }}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
+            <TableBody
+              style={
+                tableRows.length
+                  ? {
+                      height: `${rowVirtualizer.getTotalSize()}px`,
+                      position: "relative",
+                    }
+                  : undefined
+              }
+            >
+              {tableRows.length ? (
+                rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = tableRows[virtualRow.index];
+
+                  return (
+                    <TableRow
+                      key={row.id}
+                      style={{
+                        position: "absolute",
+                        transform: `translateY(${virtualRow.start}px)`,
+                        width: table.getTotalSize(),
+                      }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          style={{ width: cell.column.getSize() }}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell
+                    className="h-48 text-center text-muted-foreground"
+                    colSpan={columns.length}
+                  >
+                    No applications match the current filters.
+                  </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
-        ) : (
-          <div className="flex h-48 items-center justify-center px-4 text-center text-xs text-muted-foreground">
-            No applications match the current filters.
+        </div>
+        {tableRows.length ? (
+          <div className="flex flex-col gap-3 border-t p-4 text-xs md:flex-row md:items-center md:justify-between">
+            <span className="text-muted-foreground">
+              {totalCount} total · Page {page} of {pageCount}
+            </span>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="flex items-center gap-2 text-muted-foreground">
+                <span>Per page</span>
+                <select
+                  className="h-8 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+                  onChange={(event) => {
+                    const option = pageSizeOptions.find(
+                      ({ value }) => value === Number(event.target.value),
+                    );
+                    if (option) router.push(option.href);
+                  }}
+                  value={String(pageSize)}
+                >
+                  {pageSizeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex gap-2">
+                <Button asChild variant="outline">
+                  <Link href={previousPageHref}>Previous</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href={nextPageHref}>Next</Link>
+                </Button>
+              </div>
+            </div>
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -1,5 +1,6 @@
-import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
+import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import type { MembershipApplicationsListFilters } from "@/lib/membership-applications";
 
@@ -46,4 +47,44 @@ export function buildMembershipApplicationsWhere(
   }
 
   return and(...whereClauses);
+}
+
+export async function getMembershipApplicationsPage(
+  filters: MembershipApplicationsListFilters,
+) {
+  const where = buildMembershipApplicationsWhere(filters);
+  const offset = (filters.page - 1) * filters.pageSize;
+
+  const countQuery = db
+    .select({ value: count() })
+    .from(mladiPiratiMembershipApplications);
+  const [{ value: totalCount }] = await (where
+    ? countQuery.where(where)
+    : countQuery);
+
+  const baseRowsQuery = db
+    .select({
+      id: mladiPiratiMembershipApplications.id,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
+      cityAndPostalCode:
+        mladiPiratiMembershipApplications.cityAndPostalCode,
+      residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
+      email: mladiPiratiMembershipApplications.email,
+      participationMode: mladiPiratiMembershipApplications.participationMode,
+      status: mladiPiratiMembershipApplications.status,
+      createdAt: mladiPiratiMembershipApplications.createdAt,
+    })
+    .from(mladiPiratiMembershipApplications);
+
+  const rows = await (where ? baseRowsQuery.where(where) : baseRowsQuery)
+    .orderBy(desc(mladiPiratiMembershipApplications.createdAt))
+    .limit(filters.pageSize)
+    .offset(offset);
+
+  return {
+    pageCount: Math.max(1, Math.ceil(Number(totalCount) / filters.pageSize)),
+    rows,
+    totalCount: Number(totalCount),
+  };
 }

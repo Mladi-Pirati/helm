@@ -22,7 +22,6 @@ import {
 } from "@/lib/date-format";
 import {
   buildMembershipApplicationsListHref,
-  buildMembershipApplicationsQueryString,
   getMembershipApplicationStatusVariant,
   membershipApplicationStatusLabels,
   parseMembershipApplicationsFilters,
@@ -67,9 +66,7 @@ export default async function AdminMembershipApplicationPage({
   await requirePermission("members.read");
   const { applicationId } = await params;
   const filters = parseMembershipApplicationsFilters(await searchParams);
-  const backHref = buildMembershipApplicationsListHref(
-    buildMembershipApplicationsQueryString(filters),
-  );
+  const backHref = buildMembershipApplicationsListHref(filters);
 
   const [application] = await db
     .select({
