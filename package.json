@@ -1,5 +1,5 @@
 {
-  "name": "applications-receiver",
+  "name": "helm",
   "version": "0.1.0",
   "private": true,
   "scripts": {
