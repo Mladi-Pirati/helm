@@ -1,10 +1,23 @@
 import { cache } from "react";
-import { eq, and, isNull, gte, or } from "drizzle-orm";
+import { eq, and, isNull, gte, min, or } from "drizzle-orm";
 import { forbidden } from "next/navigation";
 
 import { db } from "@/db";
-import { members, memberRoles, permissions, rolePermissions, roles } from "@/db/schema";
+import {
+  memberRoles,
+  members,
+  permissions,
+  rolePermissions,
+  roles,
+} from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth/session";
+
+export async function getHighestRoleRank(): Promise<number | null> {
+  const [row] = await db.select({ rank: min(roles.rank) }).from(roles);
+  return row?.rank === null || row?.rank === undefined
+    ? null
+    : Number(row.rank);
+}
 
 /**
  * Get all permission keys for a given member ID.

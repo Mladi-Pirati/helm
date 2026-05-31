@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, max } from "drizzle-orm";
+import { and, asc, eq, inArray, max } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -17,7 +17,10 @@ import {
   createMembersKeycloakAdminClient,
   db,
   getCurrentUser,
+  getCurrentUserHighestRoleRank,
+  getHighestRoleRank,
   hasPermission,
+  sendMembershipWelcomeEmail,
   syncMemberApplicationRoles,
 } from "@/lib/members-action-dependencies";
 import {
@@ -68,6 +71,17 @@ const deleteMemberSchema = z.object({
   mode: z.enum(["local", "local-and-keycloak", "local-and-revoke-helm"]),
 });
 
+const bulkResendWelcomeEmailSchema = z.object({
+  memberIds: z
+    .array(z.string())
+    .transform((memberIds) => [
+      ...new Set(memberIds.map((memberId) => memberId.trim()).filter(Boolean)),
+    ])
+    .refine((memberIds) => memberIds.length > 0, {
+      message: "Select at least one member.",
+    }),
+});
+
 export type DeleteMemberMode = z.infer<typeof deleteMemberSchema>["mode"];
 
 type MembersSyncLogDetails = Record<
@@ -81,6 +95,18 @@ type DbExecutor = {
   select: typeof db.select;
   update: typeof db.update;
 };
+
+type BulkResendWelcomeEmailResult =
+  | {
+      ok: true;
+      affectedCount: number;
+      failedCount: number;
+      message: string;
+      notFoundCount: number;
+      sentCount: number;
+      skippedMissingEmailCount: number;
+    }
+  | ActionFailure;
 
 function getErrorLogDetails(error: unknown): MembersSyncLogDetails {
   if (typeof error !== "object" || error === null) {
@@ -387,6 +413,150 @@ async function syncPrimaryEmailFromKeycloak(
 function revalidateMembers(memberId?: string) {
   revalidatePath("/admin/members");
   if (memberId) revalidatePath(`/admin/members/${memberId}`);
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function buildBulkResendWelcomeEmailMessage({
+  failedCount,
+  notFoundCount,
+  sentCount,
+  skippedMissingEmailCount,
+}: {
+  failedCount: number;
+  notFoundCount: number;
+  sentCount: number;
+  skippedMissingEmailCount: number;
+}) {
+  const details: string[] = [];
+
+  if (failedCount) details.push(`${failedCount} failed`);
+  if (skippedMissingEmailCount) {
+    details.push(
+      `${skippedMissingEmailCount} skipped without a primary email`,
+    );
+  }
+  if (notFoundCount) {
+    details.push(
+      `${notFoundCount} selected ${notFoundCount === 1 ? "member was" : "members were"} not found`,
+    );
+  }
+
+  const sentMessage = `Sent ${formatCount(sentCount, "welcome email")}.`;
+  if (!details.length) return sentMessage;
+
+  const detailMessage =
+    details.length === 1
+      ? details[0]
+      : `${details.slice(0, -1).join(", ")}, and ${details.at(-1)}`;
+
+  return `${sentMessage} ${detailMessage}.`;
+}
+
+async function requireHighestRankedRoleForWelcomeEmail() {
+  const [currentRank, highestRank] = await Promise.all([
+    getCurrentUserHighestRoleRank(),
+    getHighestRoleRank(),
+  ]);
+
+  if (
+    currentRank === null ||
+    highestRank === null ||
+    currentRank !== highestRank
+  ) {
+    return {
+      ok: false as const,
+      message:
+        "Only members with the highest-ranked role can resend welcome emails.",
+    };
+  }
+
+  return { ok: true as const };
+}
+
+export async function bulkResendWelcomeEmailAction(values: {
+  memberIds: string[];
+}): Promise<BulkResendWelcomeEmailResult> {
+  const access = await requireMembersPermission("members.update");
+  if (!access.ok) return access;
+
+  const rankAccess = await requireHighestRankedRoleForWelcomeEmail();
+  if (!rankAccess.ok) return rankAccess;
+
+  const parsed = bulkResendWelcomeEmailSchema.safeParse(values);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message:
+        parsed.error.issues[0]?.message ?? "Select at least one member.",
+    };
+  }
+
+  const memberIds = parsed.data.memberIds;
+  const rows = await db
+    .select({
+      email: contacts.value,
+      firstName: members.firstName,
+      id: members.id,
+      lastName: members.lastName,
+    })
+    .from(members)
+    .leftJoin(
+      contacts,
+      and(
+        eq(contacts.memberId, members.id),
+        eq(contacts.type, "email"),
+        eq(contacts.isPrimary, true),
+      ),
+    )
+    .where(inArray(members.id, memberIds))
+    .orderBy(asc(members.firstName), asc(members.lastName), asc(members.id));
+
+  const notFoundCount = memberIds.length - rows.length;
+  let sentCount = 0;
+  let failedCount = 0;
+  let skippedMissingEmailCount = 0;
+
+  for (const row of rows) {
+    const email = row.email?.trim();
+
+    if (!email) {
+      skippedMissingEmailCount += 1;
+      continue;
+    }
+
+    const sent = await sendMembershipWelcomeEmail({
+      email,
+      firstName: row.firstName,
+      idempotencyKey: `membership-welcome-resend/${row.id}/${crypto.randomUUID()}`,
+      memberId: row.id,
+    });
+
+    if (sent) {
+      sentCount += 1;
+    } else {
+      failedCount += 1;
+    }
+  }
+
+  revalidateMembers();
+
+  return {
+    ok: true,
+    affectedCount: rows.length,
+    failedCount,
+    message: buildBulkResendWelcomeEmailMessage({
+      failedCount,
+      notFoundCount,
+      sentCount,
+      skippedMissingEmailCount,
+    }),
+    notFoundCount,
+    sentCount,
+    skippedMissingEmailCount,
+  };
 }
 
 export async function searchKeycloakUsersAction(query: string): Promise<

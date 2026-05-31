@@ -9,6 +9,8 @@ import { db } from "@/db";
 import { mladiPiratiMembershipApplications, roles } from "@/db/schema";
 import {
   getCurrentUserPermissions,
+  getCurrentUserHighestRoleRank,
+  getHighestRoleRank,
   requirePermission,
 } from "@/lib/auth/permissions";
 import { formatPendingMembershipApplicationCount } from "@/lib/membership-applications";
@@ -25,7 +27,12 @@ export default async function MembersPage({
   searchParams: Promise<MembersSearchParams>;
 }) {
   await requirePermission("members.read");
-  const { permissions } = await getCurrentUserPermissions();
+  const [{ permissions }, currentUserHighestRoleRank, highestRoleRank] =
+    await Promise.all([
+      getCurrentUserPermissions(),
+      getCurrentUserHighestRoleRank(),
+      getHighestRoleRank(),
+    ]);
   const filters = parseMembersFilters(await searchParams);
   const [{ rows, pageCount, totalCount }, roleOptions, pendingApplications] =
     await Promise.all([
@@ -88,6 +95,11 @@ export default async function MembersPage({
 
       <MembersManagement
         canCreate={permissions.includes("members.create")}
+        canResendWelcomeEmail={
+          permissions.includes("members.update") &&
+          currentUserHighestRoleRank !== null &&
+          currentUserHighestRoleRank === highestRoleRank
+        }
         filters={filters}
         nextPageHref={buildMembersListHref({
           ...filters,

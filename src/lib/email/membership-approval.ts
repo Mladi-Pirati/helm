@@ -10,6 +10,13 @@ export type MembershipApprovalEmailInput = {
   firstName: string;
 };
 
+export type MembershipWelcomeEmailInput = {
+  email: string;
+  firstName: string;
+  idempotencyKey: string;
+  memberId: string;
+};
+
 export type MembershipApprovalEmailSender = {
   send(input: MembershipApprovalEmailInput): Promise<boolean>;
 };
@@ -85,4 +92,30 @@ export async function sendMembershipApprovalEmail(
     text: email.text,
     to: input.email,
   });
+}
+
+export async function sendMembershipWelcomeEmail(
+  input: MembershipWelcomeEmailInput,
+  dependencies?: Parameters<typeof sendResendEmail>[1],
+) {
+  const email = buildMembershipApprovalEmail({
+    applicationId: input.memberId,
+    email: input.email,
+    firstName: input.firstName,
+  });
+
+  return sendResendEmail(
+    {
+      html: email.html,
+      idempotencyKey: input.idempotencyKey,
+      subject: email.subject,
+      tags: [
+        { name: "category", value: "membership_welcome_resend" },
+        { name: "member_id", value: input.memberId },
+      ],
+      text: email.text,
+      to: input.email,
+    },
+    dependencies,
+  );
 }

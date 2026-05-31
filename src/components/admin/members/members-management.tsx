@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -9,6 +9,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
 } from "@tanstack/react-table";
 import {
   ArrowDownAZIcon,
@@ -16,14 +17,25 @@ import {
   CheckIcon,
   ChevronsUpDownIcon,
   FilterIcon,
+  MailIcon,
   PlusIcon,
   XIcon,
 } from "lucide-react";
 
 import {
+  bulkResendWelcomeEmailAction,
   createMemberAction,
   searchKeycloakUsersAction,
 } from "@/actions/members";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +55,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -714,7 +732,99 @@ function RolesFilterDialog({
   );
 }
 
+function getMemberDisplayName(row: MemberListRow) {
+  return `${row.firstName} ${row.lastName}`.trim() || row.username;
+}
+
+function getMemberPreview(rows: MemberListRow[]) {
+  const preview = rows
+    .slice(0, 3)
+    .map((row) => getMemberDisplayName(row))
+    .join(", ");
+
+  if (rows.length <= 3) return preview;
+  return `${preview}, and ${rows.length - 3} more`;
+}
+
+function BulkResendWelcomeEmailDialog({
+  onOpenChange,
+  onSuccess,
+  open,
+  rows,
+}: {
+  onOpenChange: (open: boolean) => void;
+  onSuccess: (message: string) => void;
+  open: boolean;
+  rows: MemberListRow[];
+}) {
+  const router = useRouter();
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const selectedCount = rows.length;
+  const canSubmit = selectedCount > 0;
+
+  function handleOpenChange(nextOpen: boolean) {
+    onOpenChange(nextOpen);
+    if (!nextOpen) setServerMessage(null);
+  }
+
+  function handleConfirm() {
+    setServerMessage(null);
+
+    if (!canSubmit) {
+      setServerMessage("Select at least one member.");
+      return;
+    }
+
+    startTransition(async () => {
+      const result = await bulkResendWelcomeEmailAction({
+        memberIds: rows.map((row) => row.id),
+      });
+
+      if (!result.ok) {
+        setServerMessage(result.message);
+        return;
+      }
+
+      handleOpenChange(false);
+      onSuccess(result.message);
+      router.refresh();
+    });
+  }
+
+  return (
+    <AlertDialog onOpenChange={handleOpenChange} open={open}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Resend welcome email?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will send the welcome email separately to each selected member
+            with a primary email address.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {selectedCount ? (
+          <p className="text-xs text-muted-foreground">
+            Selected: {getMemberPreview(rows)}
+          </p>
+        ) : null}
+        {serverMessage ? (
+          <p className="text-xs font-medium text-destructive">
+            {serverMessage}
+          </p>
+        ) : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+          <Button disabled={isPending || !canSubmit} onClick={handleConfirm}>
+            {isPending ? "Sending..." : "Resend welcome email"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function MembersManagement({
+  canResendWelcomeEmail,
   canCreate,
   filters,
   nextPageHref,
@@ -727,6 +837,7 @@ export function MembersManagement({
   roleOptions,
   totalCount,
 }: {
+  canResendWelcomeEmail: boolean;
   canCreate: boolean;
   filters: MembersListFilters;
   nextPageHref: string;
@@ -740,7 +851,47 @@ export function MembersManagement({
   totalCount: number;
 }) {
   const router = useRouter();
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [bulkResendOpen, setBulkResendOpen] = useState(false);
+  const [feedback, setFeedback] = useState<{
+    kind: "error" | "success";
+    message: string;
+  } | null>(null);
   const columns: ColumnDef<MemberListRow>[] = [
+    ...(canResendWelcomeEmail
+      ? [
+          {
+            id: "select",
+            header: ({ table }) => (
+              <Checkbox
+                aria-label="Select all visible members"
+                checked={
+                  table.getIsAllRowsSelected()
+                    ? true
+                    : table.getIsSomeRowsSelected()
+                      ? "indeterminate"
+                      : false
+                }
+                onCheckedChange={(value) => {
+                  table.toggleAllRowsSelected(!!value);
+                  setFeedback(null);
+                }}
+              />
+            ),
+            size: 44,
+            cell: ({ row }) => (
+              <Checkbox
+                aria-label={`Select member ${getMemberDisplayName(row.original)}`}
+                checked={row.getIsSelected()}
+                onCheckedChange={(value) => {
+                  row.toggleSelected(!!value);
+                  setFeedback(null);
+                }}
+              />
+            ),
+          } satisfies ColumnDef<MemberListRow>,
+        ]
+      : []),
     {
       id: "member",
       header: () => {
@@ -861,9 +1012,31 @@ export function MembersManagement({
   const table = useReactTable({
     columns,
     data: rows,
+    enableRowSelection: canResendWelcomeEmail,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
+    onRowSelectionChange: setRowSelection,
+    state: {
+      rowSelection,
+    },
   });
+  const selectedRows = table
+    .getSelectedRowModel()
+    .rows.map((row) => row.original);
+  const selectedCount = selectedRows.length;
+  const hasSelection = selectedCount > 0;
+
+  useEffect(() => {
+    setRowSelection({});
+  }, [rows]);
+
+  function handleBulkSuccess(message: string) {
+    setFeedback({
+      kind: "success",
+      message,
+    });
+    setRowSelection({});
+  }
 
   return (
     <Card>
@@ -879,6 +1052,51 @@ export function MembersManagement({
         </div>
       </CardHeader>
       <CardContent className="px-0">
+        {canResendWelcomeEmail ? (
+          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-h-4">
+              {feedback ? (
+                <p
+                  className={
+                    feedback.kind === "error"
+                      ? "text-xs font-medium text-destructive"
+                      : "text-xs text-muted-foreground"
+                  }
+                >
+                  {feedback.message}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {selectedCount
+                    ? `${selectedCount} selected`
+                    : "Select members to use bulk actions."}
+                </p>
+              )}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button disabled={!hasSelection} size="xs" type="button">
+                  Bulk actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={!hasSelection}
+                  onSelect={() => setBulkResendOpen(true)}
+                >
+                  <MailIcon className="size-3.5" />
+                  Resend welcome email
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <BulkResendWelcomeEmailDialog
+              onOpenChange={setBulkResendOpen}
+              onSuccess={handleBulkSuccess}
+              open={bulkResendOpen}
+              rows={selectedRows}
+            />
+          </div>
+        ) : null}
         <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

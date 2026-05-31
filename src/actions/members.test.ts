@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 let allowed = true;
 let currentMemberId: string | null = "current-member";
+let currentUserHighestRoleRank: number | null = 1;
+let highestRoleRank: number | null = 1;
 let targetMember:
   | {
       disabledAt: Date | null;
@@ -70,6 +72,19 @@ let createdContacts: Array<{
   type: string;
   value: string;
 }> = [];
+let bulkResendRows: Array<{
+  email: string | null;
+  firstName: string;
+  id: string;
+  lastName: string;
+}> = [];
+let sentWelcomeEmails: Array<{
+  email: string;
+  firstName: string;
+  idempotencyKey: string;
+  memberId: string;
+}> = [];
+let failingWelcomeEmailAddresses = new Set<string>();
 let failNextMemberInsertWithUniqueViolation = false;
 
 function createMembersKeycloakAdminClient() {
@@ -115,7 +130,9 @@ function createMembersKeycloakAdminClient() {
 }
 
 async function hasPermission(permissionKey: string) {
-  expect(["members.create", "members.delete"]).toContain(permissionKey);
+  expect(["members.create", "members.delete", "members.update"]).toContain(
+    permissionKey,
+  );
   return allowed;
 }
 
@@ -123,6 +140,24 @@ async function getCurrentUser() {
   return currentMemberId
     ? { keycloakUserId: "current-keycloak-user" }
     : null;
+}
+
+async function getCurrentUserHighestRoleRank() {
+  return currentUserHighestRoleRank;
+}
+
+async function getHighestRoleRank() {
+  return highestRoleRank;
+}
+
+async function sendMembershipWelcomeEmail(input: {
+  email: string;
+  firstName: string;
+  idempotencyKey: string;
+  memberId: string;
+}) {
+  sentWelcomeEmails.push(input);
+  return !failingWelcomeEmailAddresses.has(input.email);
 }
 
 async function syncMemberApplicationRoles(values: {
@@ -162,8 +197,17 @@ type MockDb = {
     };
   };
   select(): {
-    from(): {
-      where(): Promise<Array<{ value: null }>>;
+    from(table?: unknown): {
+      leftJoin(): {
+        where(): {
+          orderBy(): Promise<typeof bulkResendRows>;
+        };
+      };
+      where(condition?: unknown):
+        | Promise<Array<{ value: null }>>
+        | {
+            orderBy(): Promise<typeof bulkResendRows>;
+          };
     };
   };
   transaction<T>(callback: (tx: MockDb) => Promise<T>): Promise<T>;
@@ -240,8 +284,27 @@ const db: MockDb = {
     return {
       from() {
         return {
-          async where() {
-            return [{ value: null }];
+          leftJoin() {
+            return {
+              where() {
+                return {
+                  async orderBy() {
+                    return bulkResendRows;
+                  },
+                };
+              },
+            };
+          },
+          where() {
+            if (bulkResendRows.length) {
+              return {
+                async orderBy() {
+                  return bulkResendRows;
+                },
+              };
+            }
+
+            return Promise.resolve([{ value: null }]);
           },
         };
       },
@@ -265,7 +328,10 @@ mock.module("@/lib/members-action-dependencies", () => ({
   createMembersKeycloakAdminClient,
   db,
   getCurrentUser,
+  getCurrentUserHighestRoleRank,
+  getHighestRoleRank,
   hasPermission,
+  sendMembershipWelcomeEmail,
   syncMemberApplicationRoles,
 }));
 
@@ -278,6 +344,8 @@ afterAll(() => {
 beforeEach(() => {
   allowed = true;
   currentMemberId = "current-member";
+  currentUserHighestRoleRank = 1;
+  highestRoleRank = 1;
   targetMember = {
     disabledAt: null,
     firstName: "Ada",
@@ -308,6 +376,9 @@ beforeEach(() => {
   createdKeycloakUsers = [];
   createdMembers = [];
   createdContacts = [];
+  bulkResendRows = [];
+  sentWelcomeEmails = [];
+  failingWelcomeEmailAddresses = new Set<string>();
   failNextMemberInsertWithUniqueViolation = false;
 });
 
@@ -549,5 +620,129 @@ describe("deleteMemberAction", () => {
       },
     ]);
     expect(deletedMemberIds).toHaveLength(1);
+  });
+});
+
+describe("bulkResendWelcomeEmailAction", () => {
+  test("rejects users without member update permission", async () => {
+    allowed = false;
+    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(
+      bulkResendWelcomeEmailAction({ memberIds: ["member-1"] }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "You are not allowed to manage members.",
+    });
+    expect(sentWelcomeEmails).toEqual([]);
+  });
+
+  test("rejects users without the globally highest-ranked role", async () => {
+    currentUserHighestRoleRank = 2;
+    highestRoleRank = 1;
+    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(
+      bulkResendWelcomeEmailAction({ memberIds: ["member-1"] }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "Only members with the highest-ranked role can resend welcome emails.",
+    });
+    expect(sentWelcomeEmails).toEqual([]);
+  });
+
+  test("sends one welcome email per selected member with a single recipient", async () => {
+    bulkResendRows = [
+      {
+        email: "ana@example.test",
+        firstName: "Ana",
+        id: "member-1",
+        lastName: "Novak",
+      },
+      {
+        email: "bine@example.test",
+        firstName: "Bine",
+        id: "member-2",
+        lastName: "Kranjc",
+      },
+    ];
+    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(
+      bulkResendWelcomeEmailAction({
+        memberIds: ["member-1", "member-2", "member-1"],
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      affectedCount: 2,
+      failedCount: 0,
+      notFoundCount: 0,
+      sentCount: 2,
+      skippedMissingEmailCount: 0,
+    });
+    expect(sentWelcomeEmails).toHaveLength(2);
+    expect(sentWelcomeEmails.map((email) => email.email)).toEqual([
+      "ana@example.test",
+      "bine@example.test",
+    ]);
+    expect(
+      sentWelcomeEmails.every((email) => typeof email.email === "string"),
+    ).toBe(true);
+    expect(
+      sentWelcomeEmails.every((email) =>
+        email.idempotencyKey.startsWith(
+          `membership-welcome-resend/${email.memberId}/`,
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      sentWelcomeEmails.some((email) =>
+        email.idempotencyKey.startsWith("membership-approval/"),
+      ),
+    ).toBe(false);
+  });
+
+  test("reports skipped missing emails, not-found members, and partial failures", async () => {
+    bulkResendRows = [
+      {
+        email: "ana@example.test",
+        firstName: "Ana",
+        id: "member-1",
+        lastName: "Novak",
+      },
+      {
+        email: null,
+        firstName: "Bine",
+        id: "member-2",
+        lastName: "Kranjc",
+      },
+      {
+        email: "cilka@example.test",
+        firstName: "Cilka",
+        id: "member-3",
+        lastName: "Kos",
+      },
+    ];
+    failingWelcomeEmailAddresses.add("cilka@example.test");
+    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(
+      bulkResendWelcomeEmailAction({
+        memberIds: ["member-1", "member-2", "member-3", "missing-member"],
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      affectedCount: 3,
+      failedCount: 1,
+      message:
+        "Sent 1 welcome email. 1 failed, 1 skipped without a primary email, and 1 selected member was not found.",
+      notFoundCount: 1,
+      sentCount: 1,
+      skippedMissingEmailCount: 1,
+    });
+    expect(sentWelcomeEmails.map((email) => email.email)).toEqual([
+      "ana@example.test",
+      "cilka@example.test",
+    ]);
   });
 });
