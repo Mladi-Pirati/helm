@@ -18,6 +18,7 @@ env:
   REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
+  TRIGGER_DEPLOY_WEBHOOK: ${{ secrets.TRIGGER_DEPLOY_WEBHOOK }}
 
 
 jobs:
@@ -123,3 +124,10 @@ jobs:
           TAGS: ${{ steps.migrator-tags.outputs.tags }}
           DIGEST: ${{ steps.build-and-push-migrator.outputs.digest }}
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      - name: Trigger redeploy
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          curl --fail-with-body --show-error --silent \
+            --request POST \
+            "${TRIGGER_DEPLOY_WEBHOOK:?TRIGGER_DEPLOY_WEBHOOK is not configured}"
