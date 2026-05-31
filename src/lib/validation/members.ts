@@ -17,7 +17,13 @@ export const primaryEmailSchema = z
 
 export const createMemberSchema = z.object({
   firstName: trimmedRequired("First name", 120),
-  keycloakId: trimmedRequired("Keycloak user", 160),
+  keycloakId: z
+    .string()
+    .trim()
+    .max(160)
+    .optional()
+    .or(z.literal(""))
+    .default(""),
   lastName: trimmedRequired("Last name", 120),
   notes: optionalText().default(""),
   primaryEmail: primaryEmailSchema,

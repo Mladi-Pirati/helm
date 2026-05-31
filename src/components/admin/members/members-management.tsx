@@ -17,6 +17,7 @@ import {
   ChevronsUpDownIcon,
   FilterIcon,
   PlusIcon,
+  XIcon,
 } from "lucide-react";
 
 import {
@@ -118,6 +119,13 @@ type RoleOption = {
   name: string;
 };
 
+type CreateMemberFieldErrors = Partial<
+  Record<
+    "firstName" | "keycloakId" | "lastName" | "primaryEmail" | "username",
+    string
+  >
+>;
+
 function formatMembership(value: MemberListRow["currentMembership"]) {
   if (!value) return "No active membership";
   if (!value.expiresAt) return "Indefinite";
@@ -190,6 +198,7 @@ function AddMemberSheet() {
     primaryEmail: "",
     username: "",
   });
+  const [fieldErrors, setFieldErrors] = useState<CreateMemberFieldErrors>({});
   const [users, setUsers] = useState<KeycloakUserOption[]>([]);
   const [serverMessage, setServerMessage] = useState<string | null>(null);
   const searchIdRef = useRef(0);
@@ -219,6 +228,42 @@ function AddMemberSheet() {
     });
   }
 
+  function setMemberField(
+    field: keyof typeof memberForm,
+    value: string,
+    errorField?: keyof CreateMemberFieldErrors,
+  ) {
+    setMemberForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    if (errorField) {
+      setFieldErrors((current) => ({
+        ...current,
+        [errorField]: undefined,
+      }));
+    }
+  }
+
+  function clearSelectedUser() {
+    setSelectedUser(null);
+    setMemberForm({
+      firstName: "",
+      lastName: "",
+      notes: "",
+      primaryEmail: "",
+      username: "",
+    });
+    setFieldErrors((current) => ({
+      ...current,
+      firstName: undefined,
+      keycloakId: undefined,
+      lastName: undefined,
+      primaryEmail: undefined,
+      username: undefined,
+    }));
+  }
+
   function reset() {
     searchIdRef.current += 1;
     setQuery("");
@@ -230,31 +275,28 @@ function AddMemberSheet() {
       primaryEmail: "",
       username: "",
     });
+    setFieldErrors({});
     setUsers([]);
     setServerMessage(null);
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedUser) {
-      setServerMessage("Choose a Keycloak user first.");
-      return;
-    }
-
-    const formData = new FormData(event.currentTarget);
     setServerMessage(null);
+    setFieldErrors({});
     startTransition(async () => {
       const result = await createMemberAction({
-        firstName: String(formData.get("firstName") ?? ""),
-        keycloakId: selectedUser.id,
-        lastName: String(formData.get("lastName") ?? ""),
-        notes: String(formData.get("notes") ?? ""),
-        primaryEmail: String(formData.get("primaryEmail") ?? ""),
-        username: String(formData.get("username") ?? ""),
+        firstName: memberForm.firstName,
+        keycloakId: selectedUser?.id ?? "",
+        lastName: memberForm.lastName,
+        notes: memberForm.notes,
+        primaryEmail: memberForm.primaryEmail,
+        username: memberForm.username,
       });
 
       if (!result.ok) {
         setServerMessage(result.message);
+        setFieldErrors(result.fieldErrors ?? {});
         return;
       }
 
@@ -291,80 +333,99 @@ function AddMemberSheet() {
             <label className="text-xs font-medium" htmlFor="keycloak-search">
               Keycloak user
             </label>
-            <Popover onOpenChange={setPickerOpen} open={pickerOpen}>
-              <PopoverTrigger asChild>
+            <div className="flex gap-2">
+              <Popover onOpenChange={setPickerOpen} open={pickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    aria-invalid={Boolean(fieldErrors.keycloakId)}
+                    className="flex-1 justify-between"
+                    type="button"
+                    variant="outline"
+                  >
+                    {selectedUser
+                      ? `${selectedUser.fullName} (@${selectedUser.username})`
+                      : "Search Keycloak users"}
+                    <ChevronsUpDownIcon className="size-4 opacity-60" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-96 p-2">
+                  <Input
+                    autoComplete="off"
+                    id="keycloak-search"
+                    onChange={(event) => handleSearchChange(event.target.value)}
+                    placeholder="Search by name, username, or email"
+                    value={query}
+                  />
+                  <div className="mt-2 grid max-h-72 gap-1 overflow-y-auto">
+                    {isSearching ? (
+                      <>
+                        <Skeleton className="h-10" />
+                        <Skeleton className="h-10" />
+                      </>
+                    ) : null}
+                    {!isSearching && users.length === 0 ? (
+                      <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                        Enter at least two characters to search.
+                      </p>
+                    ) : null}
+                    {users.map((user) => (
+                      <button
+                        className="grid gap-0.5 rounded-none px-2 py-2 text-left text-xs hover:bg-muted"
+                        key={user.id}
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setMemberForm({
+                            firstName: user.firstName ?? "",
+                            lastName: user.lastName ?? "",
+                            notes: "",
+                            primaryEmail: user.email ?? "",
+                            username: user.username,
+                          });
+                          setFieldErrors({});
+                          setPickerOpen(false);
+                        }}
+                        type="button"
+                      >
+                        <span className="flex items-center gap-2 font-medium">
+                          {selectedUser?.id === user.id ? (
+                            <CheckIcon className="size-3" />
+                          ) : null}
+                          {user.fullName}
+                        </span>
+                        <span className="text-muted-foreground">
+                          @{user.username}
+                          {user.email ? ` - ${user.email}` : ""}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {selectedUser ? (
                 <Button
-                  className="justify-between"
+                  aria-label="Clear selected Keycloak user"
+                  onClick={clearSelectedUser}
+                  size="icon"
                   type="button"
                   variant="outline"
                 >
-                  {selectedUser
-                    ? `${selectedUser.fullName} (@${selectedUser.username})`
-                    : "Search Keycloak users"}
-                  <ChevronsUpDownIcon className="size-4 opacity-60" />
+                  <XIcon className="size-4" />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-96 p-2">
-                <Input
-                  autoComplete="off"
-                  id="keycloak-search"
-                  onChange={(event) => handleSearchChange(event.target.value)}
-                  placeholder="Search by name, username, or email"
-                  value={query}
-                />
-                <div className="mt-2 grid max-h-72 gap-1 overflow-y-auto">
-                  {isSearching ? (
-                    <>
-                      <Skeleton className="h-10" />
-                      <Skeleton className="h-10" />
-                    </>
-                  ) : null}
-                  {!isSearching && users.length === 0 ? (
-                    <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-                      Enter at least two characters to search.
-                    </p>
-                  ) : null}
-                  {users.map((user) => (
-                    <button
-                      className="grid gap-0.5 rounded-none px-2 py-2 text-left text-xs hover:bg-muted"
-                      key={user.id}
-                      onClick={() => {
-                        setSelectedUser(user);
-                        setMemberForm({
-                          firstName: user.firstName ?? "",
-                          lastName: user.lastName ?? "",
-                          notes: "",
-                          primaryEmail: user.email ?? "",
-                          username: user.username,
-                        });
-                        setPickerOpen(false);
-                      }}
-                      type="button"
-                    >
-                      <span className="flex items-center gap-2 font-medium">
-                        {selectedUser?.id === user.id ? (
-                          <CheckIcon className="size-3" />
-                        ) : null}
-                        {user.fullName}
-                      </span>
-                      <span className="text-muted-foreground">
-                        @{user.username}
-                        {user.email ? ` - ${user.email}` : ""}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
+              ) : null}
+            </div>
+            {fieldErrors.keycloakId ? (
+              <p className="text-xs font-medium text-destructive">
+                {fieldErrors.keycloakId}
+              </p>
+            ) : null}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
+              aria-invalid={Boolean(fieldErrors.firstName)}
+              disabled={Boolean(selectedUser)}
               onChange={(event) =>
-                setMemberForm((current) => ({
-                  ...current,
-                  firstName: event.target.value,
-                }))
+                setMemberField("firstName", event.target.value, "firstName")
               }
               value={memberForm.firstName}
               name="firstName"
@@ -372,11 +433,10 @@ function AddMemberSheet() {
               required
             />
             <Input
+              aria-invalid={Boolean(fieldErrors.lastName)}
+              disabled={Boolean(selectedUser)}
               onChange={(event) =>
-                setMemberForm((current) => ({
-                  ...current,
-                  lastName: event.target.value,
-                }))
+                setMemberField("lastName", event.target.value, "lastName")
               }
               value={memberForm.lastName}
               name="lastName"
@@ -384,24 +444,36 @@ function AddMemberSheet() {
               required
             />
           </div>
+          {fieldErrors.firstName || fieldErrors.lastName ? (
+            <p className="text-xs font-medium text-destructive">
+              {fieldErrors.firstName ?? fieldErrors.lastName}
+            </p>
+          ) : null}
           <Input
+            aria-invalid={Boolean(fieldErrors.username)}
+            disabled={Boolean(selectedUser)}
             onChange={(event) =>
-              setMemberForm((current) => ({
-                ...current,
-                username: event.target.value,
-              }))
+              setMemberField("username", event.target.value, "username")
             }
             value={memberForm.username}
             name="username"
             placeholder="Username"
             required
           />
+          {fieldErrors.username ? (
+            <p className="text-xs font-medium text-destructive">
+              {fieldErrors.username}
+            </p>
+          ) : null}
           <Input
+            aria-invalid={Boolean(fieldErrors.primaryEmail)}
+            disabled={Boolean(selectedUser?.email)}
             onChange={(event) =>
-              setMemberForm((current) => ({
-                ...current,
-                primaryEmail: event.target.value,
-              }))
+              setMemberField(
+                "primaryEmail",
+                event.target.value,
+                "primaryEmail",
+              )
             }
             value={memberForm.primaryEmail}
             name="primaryEmail"
@@ -409,13 +481,15 @@ function AddMemberSheet() {
             required
             type="email"
           />
+          {fieldErrors.primaryEmail ? (
+            <p className="text-xs font-medium text-destructive">
+              {fieldErrors.primaryEmail}
+            </p>
+          ) : null}
           <Input
             name="notes"
             onChange={(event) =>
-              setMemberForm((current) => ({
-                ...current,
-                notes: event.target.value,
-              }))
+              setMemberField("notes", event.target.value)
             }
             placeholder="Notes"
             value={memberForm.notes}

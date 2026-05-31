@@ -53,6 +53,21 @@ describe("members management table implementation", () => {
     );
   });
 
+  test("locks and clears Keycloak-derived add-member fields", () => {
+    const source = readFileSync(
+      "src/components/admin/members/members-management.tsx",
+      "utf8",
+    );
+
+    expect(source).toContain("function clearSelectedUser()");
+    expect(source).toContain("firstName: \"\"");
+    expect(source).toContain("lastName: \"\"");
+    expect(source).toContain("primaryEmail: \"\"");
+    expect(source).toContain("username: \"\"");
+    expect(source).toContain("disabled={Boolean(selectedUser)}");
+    expect(source).toContain("disabled={Boolean(selectedUser?.email)}");
+  });
+
   test("shared table headers default to extra-bold text", () => {
     const source = readFileSync("src/components/ui/table.tsx", "utf8");
 

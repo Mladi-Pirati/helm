@@ -29,6 +29,39 @@ describe("member validation", () => {
     });
   });
 
+  test("normalizes create-member input without a selected Keycloak user", () => {
+    expect(
+      createMemberSchema.parse({
+        firstName: " Ana ",
+        lastName: " Novak ",
+        primaryEmail: " ANA@EXAMPLE.TEST ",
+        username: " ana ",
+      }),
+    ).toEqual({
+      firstName: "Ana",
+      keycloakId: "",
+      lastName: "Novak",
+      notes: "",
+      primaryEmail: "ana@example.test",
+      username: "ana",
+    });
+  });
+
+  test("requires primary email when creating without a selected Keycloak user", () => {
+    const result = createMemberSchema.safeParse({
+      firstName: "Ana",
+      keycloakId: "",
+      lastName: "Novak",
+      primaryEmail: "",
+      username: "ana",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.flatten().fieldErrors.primaryEmail?.[0]).toBe(
+      "Enter a valid email address.",
+    );
+  });
+
   test("requires role expiry dates to be in the future when present", () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     expect(

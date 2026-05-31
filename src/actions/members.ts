@@ -447,18 +447,63 @@ export async function createMemberAction(
   }
 
   try {
-    const keycloakUser = await createMembersKeycloakAdminClient().getUser(
-      parsed.data.keycloakId,
-    );
+    const keycloak = createMembersKeycloakAdminClient();
+    const resolvedKeycloakUser = parsed.data.keycloakId
+      ? {
+          localUsername: parsed.data.username,
+          user: await keycloak.getUser(parsed.data.keycloakId),
+        }
+      : await (async () => {
+          const existingUser = await keycloak.findUserByEmail(
+            parsed.data.primaryEmail,
+          );
+          if (existingUser) {
+            return {
+              localUsername: existingUser.username,
+              user: existingUser,
+            };
+          }
+
+          const existingUsername = await keycloak.findUserByUsername(
+            parsed.data.username,
+          );
+          if (existingUsername) {
+            return {
+              fieldError: "That username is already taken in Keycloak.",
+            } as const;
+          }
+
+          return {
+            localUsername: parsed.data.username,
+            user: await keycloak.createUser({
+              email: parsed.data.primaryEmail,
+              firstName: parsed.data.firstName,
+              lastName: parsed.data.lastName,
+              username: parsed.data.username,
+            }),
+          };
+        })();
+
+    if ("fieldError" in resolvedKeycloakUser) {
+      return {
+        ok: false,
+        message: resolvedKeycloakUser.fieldError,
+        fieldErrors: {
+          username: resolvedKeycloakUser.fieldError,
+        },
+      };
+    }
+
+    const { localUsername, user: keycloakUser } = resolvedKeycloakUser;
     const [member] = await db.transaction(async (tx) => {
       const createdMembers = await tx
         .insert(members)
         .values({
           firstName: parsed.data.firstName || keycloakUser.firstName || "",
-          keycloakId: parsed.data.keycloakId,
+          keycloakId: keycloakUser.id,
           lastName: parsed.data.lastName || keycloakUser.lastName || "",
           notes: parsed.data.notes,
-          username: parsed.data.username || keycloakUser.username,
+          username: localUsername || keycloakUser.username,
         })
         .returning({ id: members.id });
 
