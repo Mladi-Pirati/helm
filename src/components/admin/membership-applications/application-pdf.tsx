@@ -40,7 +40,8 @@ Font.register({
 
 export type MembershipApplicationPdfRow = {
   id: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   dateOfBirth: string;
   placeOfBirth: string;
   streetAddress: string;
@@ -54,13 +55,13 @@ export type MembershipApplicationPdfRow = {
   consentsToDataProcessing: boolean;
   acceptsStatuteAndProgram: boolean;
   status: MembershipApplicationStatus;
+  rejectionReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 const pdfStatusLabels: Record<MembershipApplicationStatus, string> = {
-  new: "Nova",
-  in_review: "V obravnavi",
+  pending: "V obravnavi",
   approved: "Odobrena",
   rejected: "Zavrnjena",
 };
@@ -200,6 +201,12 @@ function Field({
   );
 }
 
+function getApplicationDisplayName(
+  row: Pick<MembershipApplicationPdfRow, "firstName" | "lastName">,
+) {
+  return `${row.firstName} ${row.lastName}`.trim();
+}
+
 export function MembershipApplicationPdfDocument({
   row,
   logo,
@@ -213,10 +220,11 @@ export function MembershipApplicationPdfDocument({
   const updatedAt = formatSlovenianDateTime(row.updatedAt);
   const birthDate = formatSlovenianDate(parseDateOnly(row.dateOfBirth));
   const generatedAtLabel = formatSlovenianDateTime(generatedAt);
+  const displayName = getApplicationDisplayName(row);
 
   return (
     <Document
-      title={`Vloga za članstvo - ${row.fullName}`}
+      title={`Vloga za članstvo - ${displayName}`}
       author="Mladi Pirati"
       language="sl-SI"
     >
@@ -235,7 +243,8 @@ export function MembershipApplicationPdfDocument({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Identiteta in kontakt</Text>
           <View style={styles.grid}>
-            <Field label="Ime in priimek" value={row.fullName} />
+            <Field label="Ime" value={row.firstName} />
+            <Field label="Priimek" value={row.lastName} />
             <Field label="E-pošta" value={row.email} />
             <Field label="Telefon" value={row.phone} />
             <Field label="Discord uporabniško ime" value={row.discordUsername} />
@@ -298,6 +307,11 @@ export function MembershipApplicationPdfDocument({
           <View style={[styles.grid, { marginTop: 8 }]}>
             <Field label="ID vloge" value={row.id} />
             <Field label="Zadnja posodobitev" value={updatedAt} />
+            <Field
+              label="Razlog zavrnitve"
+              value={row.rejectionReason}
+              full
+            />
           </View>
         </View>
 

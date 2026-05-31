@@ -4,10 +4,10 @@ import Link from "next/link";
 import { logoutAction } from "@/actions/auth";
 import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 import { AdminNavLinks } from "@/components/admin/admin-nav-links";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { requireUser } from "@/lib/auth/session";
+import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 import { LogOutIcon, SettingsIcon } from "lucide-react";
 
 export default async function AdminLayout({
@@ -16,6 +16,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }>) {
   const user = await requireUser();
+  const { permissions } = await getCurrentUserPermissions();
 
   return (
     <div className="min-h-screen bg-muted/20">
@@ -34,27 +35,18 @@ export default async function AdminLayout({
                 src="/logo.png"
                 width={36}
               />
-              <span>Mladi Pirati - Prijave</span>
+              <span>Mladi Pirati - Helm</span>
             </Link>
           </div>
           <Separator />
           <div className="flex-1 p-4">
-            <AdminNavLinks
-              forcePasswordChange={user.forcePasswordChange}
-              isAdmin={user.role === "admin"}
-            />
+            <AdminNavLinks permissions={permissions} />
           </div>
           <Separator />
           <div className="flex items-center justify-between p-4">
             <div className="grid gap-1">
               <p className="text-sm font-medium">{user.fullName}</p>
               <p className="text-xs text-muted-foreground">@{user.username}</p>
-              <Badge
-                className="mt-1 w-fit"
-                variant={user.role === "admin" ? "default" : "outline"}
-              >
-                {user.role}
-              </Badge>
             </div>
             <div className="flex flex-row items-center gap-1">
               <Link href="" className={buttonVariants({ variant: "outline" })}>
@@ -84,13 +76,12 @@ export default async function AdminLayout({
                     src="/logo.png"
                     width={28}
                   />
-                  <span>Mladi Pirati - Prijave</span>
+                  <span>Mladi Pirati - Helm</span>
                 </Link>
               </div>
               <AdminMobileNav
-                forcePasswordChange={user.forcePasswordChange}
                 fullName={user.fullName}
-                role={user.role}
+                permissions={permissions}
                 username={user.username}
               />
             </div>

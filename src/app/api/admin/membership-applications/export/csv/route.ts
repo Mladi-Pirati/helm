@@ -4,7 +4,7 @@ import type { NextRequest } from "next/server";
 
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   membershipApplicationStatusLabels,
   parseMembershipApplicationsFilters,
@@ -22,7 +22,9 @@ const CSV_HEADERS = [
   "createdAt",
   "updatedAt",
   "status",
-  "fullName",
+  "rejectionReason",
+  "firstName",
+  "lastName",
   "dateOfBirth",
   "placeOfBirth",
   "streetAddress",
@@ -57,7 +59,7 @@ function toCsvRow(values: readonly unknown[]): string {
 }
 
 export async function GET(request: NextRequest) {
-  await requireAdmin();
+  await requirePermission("members.read");
 
   const rawSearchParams = Object.fromEntries(
     request.nextUrl.searchParams.entries(),
@@ -71,7 +73,9 @@ export async function GET(request: NextRequest) {
       createdAt: mladiPiratiMembershipApplications.createdAt,
       updatedAt: mladiPiratiMembershipApplications.updatedAt,
       status: mladiPiratiMembershipApplications.status,
-      fullName: mladiPiratiMembershipApplications.fullName,
+      rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
       streetAddress: mladiPiratiMembershipApplications.streetAddress,
@@ -106,7 +110,9 @@ export async function GET(request: NextRequest) {
         row.createdAt,
         row.updatedAt,
         membershipApplicationStatusLabels[status],
-        row.fullName,
+        row.rejectionReason,
+        row.firstName,
+        row.lastName,
         row.dateOfBirth,
         row.placeOfBirth,
         row.streetAddress,

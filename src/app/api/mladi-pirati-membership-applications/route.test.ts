@@ -45,7 +45,7 @@ let fetchCalls: Array<{
 let fetchResponse: Response | Error = new Response(null, { status: 204 });
 let createdApplication = {
   id: "application-123",
-  status: "new",
+  status: "pending",
 };
 
 const membershipApplicationsTable = {
@@ -66,7 +66,8 @@ const originalAdminHost = process.env.ADMIN_HOST;
 const originalFetch = globalThis.fetch;
 
 const validMembershipApplicationPayload = {
-  fullName: "Ada Lovelace",
+  firstName: "Ada",
+  lastName: "Lovelace",
   dateOfBirth: "1994-12-10",
   placeOfBirth: "Ljubljana",
   streetAddress: "Pirate Street 10",
@@ -197,7 +198,7 @@ beforeEach(() => {
   fetchResponse = new Response(null, { status: 204 });
   createdApplication = {
     id: "application-123",
-    status: "new",
+    status: "pending",
   };
   process.env.DISCORD_WEBHOOK = "https://discord.test/webhook";
   process.env.ADMIN_HOST = "https://admin.test/";
@@ -251,7 +252,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(insertedValues).toEqual([
       {
@@ -259,7 +260,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
         phone: null,
         discordUsername: null,
         motivation: null,
-        status: "new",
+        status: "pending",
         rawPayload: validMembershipApplicationPayload,
       },
     ]);
@@ -272,7 +273,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(discordPayload.embeds[0]).toMatchObject({
       title: "New Membership Application",
       description: "A new membership application is ready for review.",
-      url: "https://admin.test/admin/membership-applications",
+      url: "https://admin.test/admin/members/applications",
       color: 0x22c55e,
       fields: [
         {
@@ -355,7 +356,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(turnstileCalls).toEqual([
       {
@@ -369,7 +370,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
         phone: null,
         discordUsername: null,
         motivation: null,
-        status: "new",
+        status: "pending",
         rawPayload: validMembershipApplicationPayload,
       },
     ]);
@@ -485,6 +486,40 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(fetchCalls).toHaveLength(0);
   });
 
+  test("rejects fullName-only submissions after the split-name API change", async () => {
+    const { POST } = await routeModulePromise;
+    const response = await POST(
+      createRequest({
+        fullName: "Ada Lovelace",
+        dateOfBirth: validMembershipApplicationPayload.dateOfBirth,
+        placeOfBirth: validMembershipApplicationPayload.placeOfBirth,
+        streetAddress: validMembershipApplicationPayload.streetAddress,
+        cityAndPostalCode:
+          validMembershipApplicationPayload.cityAndPostalCode,
+        residenceRegion: validMembershipApplicationPayload.residenceRegion,
+        email: validMembershipApplicationPayload.email,
+        participationMode:
+          validMembershipApplicationPayload.participationMode,
+        consentsToDataProcessing:
+          validMembershipApplicationPayload.consentsToDataProcessing,
+        acceptsStatuteAndProgram:
+          validMembershipApplicationPayload.acceptsStatuteAndProgram,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Validation failed.",
+      fieldErrors: {
+        firstName: ["First name is required."],
+        lastName: ["Last name is required."],
+      },
+    });
+    expect(insertedValues).toHaveLength(0);
+    expect(turnstileCalls).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
   test("preserves the existing 500 response for unexpected insert failures", async () => {
     const { POST } = await routeModulePromise;
 
@@ -513,7 +548,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
     expect(fetchCalls).toHaveLength(1);
   });
@@ -530,7 +565,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({
       id: "application-123",
-      status: "new",
+      status: "pending",
     });
 
     const discordPayload = getDiscordPayload();

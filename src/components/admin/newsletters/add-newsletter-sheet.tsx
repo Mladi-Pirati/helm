@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
@@ -24,10 +24,10 @@ const defaultValues: CreateNewsletterInput = {
 
 export function AddNewsletterSheet() {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [slugEdited, setSlugEdited] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [open, setOpen] = useState(false);
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const form = useForm<CreateNewsletterInput>({
     resolver: zodResolver(createNewsletterSchema),
     defaultValues,
@@ -37,7 +37,7 @@ export function AddNewsletterSheet() {
     name: "name",
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!slugEdited) {
       form.setValue("slug", createNewsletterSlug(nameValue ?? ""), {
         shouldValidate: Boolean(nameValue),

@@ -29,11 +29,16 @@ const requiredTrue = (message: string) =>
 
 export const membershipApplicationSchema = z
   .object({
-    fullName: z
-      .string()
+    firstName: z
+      .string({ error: "First name is required." })
       .trim()
-      .min(2, "Full name is required.")
-      .max(160, "Full name must be 160 characters or fewer."),
+      .min(1, "First name is required.")
+      .max(80, "First name must be 80 characters or fewer."),
+    lastName: z
+      .string({ error: "Last name is required." })
+      .trim()
+      .min(1, "Last name is required.")
+      .max(120, "Last name must be 120 characters or fewer."),
     dateOfBirth: z
       .string()
       .regex(

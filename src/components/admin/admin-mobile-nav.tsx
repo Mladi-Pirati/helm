@@ -1,10 +1,9 @@
 "use client";
 
-import * as React from "react";
+import { useState } from "react";
 
 import { logoutAction } from "@/actions/auth";
 import { AdminNavLinks } from "@/components/admin/admin-nav-links";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -18,19 +17,17 @@ import { ListIcon, LogOutIcon, SettingsIcon } from "lucide-react";
 import Link from "next/link";
 
 type AdminMobileNavProps = {
-  forcePasswordChange: boolean;
   fullName: string;
   username: string;
-  role: "admin" | "viewer";
+  permissions: string[];
 };
 
 export function AdminMobileNav({
-  forcePasswordChange,
   fullName,
   username,
-  role,
+  permissions,
 }: AdminMobileNavProps) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
 
   return (
     <Sheet onOpenChange={setOpen} open={open}>
@@ -46,18 +43,11 @@ export function AdminMobileNav({
           <div className="grid gap-1 text-left">
             <p className="text-sm font-medium">{fullName}</p>
             <p className="text-xs text-muted-foreground">@{username}</p>
-            <Badge
-              className="mt-1 w-fit"
-              variant={role === "admin" ? "default" : "outline"}
-            >
-              {role}
-            </Badge>
           </div>
         </SheetHeader>
         <div className="grid gap-4 p-4">
           <AdminNavLinks
-            forcePasswordChange={forcePasswordChange}
-            isAdmin={role === "admin"}
+            permissions={permissions}
             onNavigate={() => setOpen(false)}
           />
           <Separator />

@@ -16,7 +16,7 @@ services:
       start_period: 10s
 
   migrate:
-    image: ghcr.io/mladi-pirati/applications-receiver:master-migrator
+    image: ghcr.io/mladi-pirati/helm:master-migrator
     restart: "no"
     command: ["bun", "run", "db:migrate"]
     pull_policy: always
@@ -27,32 +27,19 @@ services:
       db:
         condition: service_healthy
 
-  bootstrap-admin:
-    image: ghcr.io/mladi-pirati/applications-receiver:master-migrator
-    profiles:
-      - bootstrap
-    restart: "no"
-    command: ["bun", "run", "bootstrap:admin"]
-    pull_policy: always
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      NODE_ENV: production
-      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME}
-      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
-    depends_on:
-      db:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
   app:
-    image: ghcr.io/mladi-pirati/applications-receiver:master
+    image: ghcr.io/mladi-pirati/helm:master
     restart: unless-stopped
     init: true
     pull_policy: always
     environment:
       AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${ADMIN_HOST}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_DEFAULT_CLIENT_ROLE: ${KEYCLOAK_DEFAULT_CLIENT_ROLE:-user}
       LEGALIZIRAJMO_TURNSTILE_SECRET_KEY: ${LEGALIZIRAJMO_TURNSTILE_SECRET_KEY}
       LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME: ${LEGALIZIRAJMO_TURNSTILE_EXPECTED_HOSTNAME}
       NODE_ENV: production

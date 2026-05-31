@@ -1,31 +1,18 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { isAppSessionUser } from "@/lib/auth/session";
 
 export const proxy = auth((request) => {
   const pathname = request.nextUrl.pathname;
-  const isAuthenticated = Boolean(request.auth?.user);
-  const forcePasswordChange = Boolean(request.auth?.user?.forcePasswordChange);
-  const isSettingsRoute =
-    pathname === "/admin/settings" || pathname.startsWith("/admin/settings/");
+  const isAuthenticated = isAppSessionUser(request.auth?.user);
 
   if (pathname.startsWith("/admin") && !isAuthenticated) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (
-    isAuthenticated &&
-    forcePasswordChange &&
-    pathname.startsWith("/admin") &&
-    !isSettingsRoute
-  ) {
-    return NextResponse.redirect(new URL("/admin/settings", request.url));
-  }
-
   if (pathname === "/login" && isAuthenticated) {
-    return NextResponse.redirect(
-      new URL(forcePasswordChange ? "/admin/settings" : "/admin", request.url),
-    );
+    return NextResponse.redirect(new URL("/admin", request.url));
   }
 
   return NextResponse.next();

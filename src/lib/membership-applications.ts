@@ -29,8 +29,7 @@ export const participationModeLabels: Record<ParticipationMode, string> = {
 };
 
 export const membershipApplicationStatuses = [
-  "new",
-  "in_review",
+  "pending",
   "approved",
   "rejected",
 ] as const;
@@ -42,11 +41,28 @@ export const membershipApplicationStatusLabels: Record<
   MembershipApplicationStatus,
   string
 > = {
-  new: "New",
-  in_review: "In review",
+  pending: "Pending",
   approved: "Approved",
   rejected: "Rejected",
 };
+
+export const reviewMembershipApplicationStatuses = [
+  "approved",
+  "rejected",
+] as const;
+
+export type ReviewMembershipApplicationStatus =
+  (typeof reviewMembershipApplicationStatuses)[number];
+
+export const bulkMembershipApplicationActions = [
+  "approve",
+  "reject",
+  "pending",
+  "delete",
+] as const;
+
+export type BulkMembershipApplicationAction =
+  (typeof bulkMembershipApplicationActions)[number];
 
 export type MembershipApplicationsSearchParams = {
   q?: string | string[] | undefined;
@@ -116,8 +132,8 @@ export function buildMembershipApplicationsQueryString(
 
 export function buildMembershipApplicationsListHref(queryString: string) {
   return queryString
-    ? `/admin/membership-applications?${queryString}`
-    : "/admin/membership-applications";
+    ? `/admin/members/applications?${queryString}`
+    : "/admin/members/applications";
 }
 
 export function buildMembershipApplicationDetailsHref(
@@ -125,8 +141,78 @@ export function buildMembershipApplicationDetailsHref(
   queryString: string,
 ) {
   return queryString
-    ? `/admin/membership-applications/${applicationId}?${queryString}`
-    : `/admin/membership-applications/${applicationId}`;
+    ? `/admin/members/applications/${applicationId}?${queryString}`
+    : `/admin/members/applications/${applicationId}`;
+}
+
+export function getRejectionReasonWordCount(value: string) {
+  const words = value.trim().match(/\S+/g);
+
+  return words?.length ?? 0;
+}
+
+export function hasValidRejectionReason(value: string) {
+  return getRejectionReasonWordCount(value) >= 4;
+}
+
+export function formatPendingMembershipApplicationCount(count: number) {
+  return count > 99 ? "99+" : count.toString();
+}
+
+export function dedupeMembershipApplicationIds(applicationIds: string[]) {
+  return Array.from(
+    new Set(
+      applicationIds
+        .map((applicationId) => applicationId.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
+}
+
+export function buildBulkMembershipApplicationActionMessage({
+  action,
+  affectedCount,
+  memberCreationFailureCount,
+}: {
+  action: BulkMembershipApplicationAction;
+  affectedCount: number;
+  memberCreationFailureCount: number;
+}) {
+  const applicationNoun = pluralize(
+    affectedCount,
+    "application",
+    "applications",
+  );
+
+  switch (action) {
+    case "approve": {
+      const baseMessage = `Approved ${affectedCount} ${applicationNoun}.`;
+
+      if (memberCreationFailureCount <= 0) {
+        return baseMessage;
+      }
+
+      const profileNoun = pluralize(
+        memberCreationFailureCount,
+        "member profile needs",
+        "member profiles need",
+      );
+
+      return `${baseMessage} ${memberCreationFailureCount} ${profileNoun} retry.`;
+    }
+    case "reject":
+      return `Rejected ${affectedCount} ${applicationNoun}.`;
+    case "pending":
+      return `Set ${affectedCount} ${applicationNoun} back to pending.`;
+    case "delete":
+      return `Deleted ${affectedCount} ${applicationNoun}.`;
+    default:
+      return `Updated ${affectedCount} ${applicationNoun}.`;
+  }
 }
 
 export function getMembershipApplicationStatusVariant(
@@ -135,7 +221,7 @@ export function getMembershipApplicationStatusVariant(
   switch (status) {
     case "approved":
       return "default";
-    case "in_review":
+    case "pending":
       return "secondary";
     case "rejected":
       return "destructive";

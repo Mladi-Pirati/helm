@@ -43,6 +43,62 @@
       "when": 1779130273503,
       "tag": "0005_rapid_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779140197834,
+      "tag": "0006_curly_omega_flight",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779146754116,
+      "tag": "0008_brief_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779972946574,
+      "tag": "0008_lumpy_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1780003172493,
+      "tag": "0009_tranquil_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780006587441,
+      "tag": "0011_silky_black_bird",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780050000000,
+      "tag": "0012_separate_membership_application_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780074000000,
+      "tag": "0013_member_creation_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780075587206,
+      "tag": "0013_same_meltdown",
+      "breakpoints": true
     }
   ]
 }

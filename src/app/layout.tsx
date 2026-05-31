@@ -3,7 +3,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Mladi Pirati - Prijave",
+  title: "Mladi Pirati - Helm",
   description: "Admin panel and ingestion API for Mladi pirati applications.",
   icons: {
     icon: "/logo.png",

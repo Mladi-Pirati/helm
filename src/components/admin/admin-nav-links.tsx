@@ -7,13 +7,12 @@ import { cn } from "@/lib/utils";
 import {
   HomeIcon,
   MailIcon,
-  UserPlusIcon,
-  Users2Icon,
+  ShieldIcon,
+  UsersIcon,
 } from "lucide-react";
 
 type AdminNavLinksProps = {
-  forcePasswordChange: boolean;
-  isAdmin: boolean;
+  permissions: string[];
   onNavigate?: () => void;
 };
 
@@ -21,43 +20,44 @@ const baseLinkClassName =
   "flex items-center gap-2 rounded-none border px-3 py-2 text-xs font-medium transition-colors";
 
 export function AdminNavLinks({
-  forcePasswordChange,
-  isAdmin,
+  permissions,
   onNavigate,
 }: AdminNavLinksProps) {
   const pathname = usePathname();
-  const items = forcePasswordChange
-    ? []
-    : [
-        {
-          href: "/admin",
-          label: "Dashboard",
-          icon: HomeIcon,
-          active: pathname === "/admin",
-        },
-        {
-          href: "/admin/membership-applications",
-          label: "Membership applications",
-          icon: UserPlusIcon,
-          active: pathname.startsWith("/admin/membership-applications"),
-        },
-        {
-          href: "/admin/newsletters",
-          label: "Newsletters",
-          icon: MailIcon,
-          active: pathname.startsWith("/admin/newsletters"),
-        },
-        ...(isAdmin
-          ? [
-              {
-                href: "/admin/users",
-                label: "Users",
-                icon: Users2Icon,
-                active: pathname.startsWith("/admin/users"),
-              },
-            ]
-          : []),
-      ];
+  const items = [
+    {
+      href: "/admin",
+      label: "Dashboard",
+      icon: HomeIcon,
+      active: pathname === "/admin",
+      requiredPermission: null,
+    },
+    {
+      href: "/admin/members",
+      label: "Members",
+      icon: UsersIcon,
+      active: pathname.startsWith("/admin/members"),
+      requiredPermission: "members.read",
+    },
+    {
+      href: "/admin/newsletters",
+      label: "Newsletters",
+      icon: MailIcon,
+      active: pathname.startsWith("/admin/newsletters"),
+      requiredPermission: "newsletters.read",
+    },
+    {
+      href: "/admin/settings/roles",
+      label: "Access Control",
+      icon: ShieldIcon,
+      active: pathname.startsWith("/admin/settings/roles"),
+      requiredPermission: "access-control.manage_roles",
+    },
+  ].filter(
+    (item) =>
+      item.requiredPermission === null ||
+      permissions.includes(item.requiredPermission)
+  );
 
   return (
     <nav className="grid gap-2">

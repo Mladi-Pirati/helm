@@ -13,8 +13,11 @@ COPY . .
 
 # Some modules validate env presence during build, but runtime values still come
 # from the container environment.
-RUN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/applications \
+RUN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/helm \
     AUTH_SECRET="$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+    KEYCLOAK_CLIENT_ID=helm \
+    KEYCLOAK_CLIENT_SECRET=build-placeholder \
+    KEYCLOAK_ISSUER=https://keycloak.example.com/realms/build \
     NEXT_TELEMETRY_DISABLED=1 \
     bun run build
 

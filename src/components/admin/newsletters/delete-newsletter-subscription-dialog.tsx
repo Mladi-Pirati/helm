@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { deleteNewsletterSubscriptionAction } from "@/actions/newsletters";
@@ -23,9 +23,9 @@ export function DeleteNewsletterSubscriptionDialog({
   row: NewsletterSubscriptionListRow;
 }) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [open, setOpen] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const handleDelete = () => {
     setServerMessage(null);

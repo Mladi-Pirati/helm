@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { deleteMembershipApplicationAction } from "@/actions/membership-applications";
@@ -17,15 +17,19 @@ import {
 import { Button } from "@/components/ui/button";
 import type { MembershipApplicationListRow } from "./membership-applications-management";
 
+function getApplicationDisplayName(row: MembershipApplicationListRow) {
+  return `${row.firstName} ${row.lastName}`.trim();
+}
+
 export function DeleteMembershipApplicationDialog({
   row,
 }: {
   row: MembershipApplicationListRow;
 }) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
-  const [serverMessage, setServerMessage] = React.useState<string | null>(null);
-  const [isPending, startTransition] = React.useTransition();
+  const [open, setOpen] = useState(false);
+  const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   const handleDelete = () => {
     setServerMessage(null);
@@ -54,8 +58,8 @@ export function DeleteMembershipApplicationDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete application</AlertDialogTitle>
           <AlertDialogDescription>
-            Delete the membership application for {row.fullName} ({row.email})
-            permanently. This action cannot be undone.
+            Delete the membership application for {getApplicationDisplayName(row)}{" "}
+            ({row.email}) permanently. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {serverMessage ? (

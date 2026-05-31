@@ -12,7 +12,7 @@ import {
 } from "@/components/admin/membership-applications/application-pdf";
 import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
-import { requireAdmin } from "@/lib/auth/session";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   parseMembershipApplicationsFilters,
   type MembershipApplicationStatus,
@@ -47,7 +47,7 @@ function slugify(value: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  await requireAdmin();
+  await requirePermission("members.read");
 
   const rawSearchParams = Object.fromEntries(
     request.nextUrl.searchParams.entries(),
@@ -58,7 +58,8 @@ export async function GET(request: NextRequest) {
   const baseQuery = db
     .select({
       id: mladiPiratiMembershipApplications.id,
-      fullName: mladiPiratiMembershipApplications.fullName,
+      firstName: mladiPiratiMembershipApplications.firstName,
+      lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
       streetAddress: mladiPiratiMembershipApplications.streetAddress,
@@ -74,6 +75,7 @@ export async function GET(request: NextRequest) {
       acceptsStatuteAndProgram:
         mladiPiratiMembershipApplications.acceptsStatuteAndProgram,
       status: mladiPiratiMembershipApplications.status,
+      rejectionReason: mladiPiratiMembershipApplications.rejectionReason,
       createdAt: mladiPiratiMembershipApplications.createdAt,
       updatedAt: mladiPiratiMembershipApplications.updatedAt,
     })
@@ -112,7 +114,11 @@ export async function GET(request: NextRequest) {
       />,
     );
 
-    const baseName = `${slugify(row.fullName) || "application"}-${row.id.slice(0, 8)}`;
+    const displayName = `${row.firstName} ${row.lastName}`.trim();
+    const baseName = `${slugify(displayName) || "application"}-${row.id.slice(
+      0,
+      8,
+    )}`;
     let filename = `${baseName}.pdf`;
     let counter = 2;
     while (usedFilenames.has(filename)) {

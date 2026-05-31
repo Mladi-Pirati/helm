@@ -94,6 +94,10 @@ function getAgeFromDateOfBirth(dateOfBirth: string) {
   return age;
 }
 
+function getApplicationDisplayName(firstName: string, lastName: string) {
+  return `${firstName} ${lastName}`.trim();
+}
+
 function createCaptchaRequiredResponse(
   request: Request,
   retryAfterSeconds: number | null,
@@ -314,7 +318,8 @@ export async function POST(request: Request) {
 
   try {
     const {
-      fullName,
+      firstName,
+      lastName,
       dateOfBirth,
       placeOfBirth,
       streetAddress,
@@ -328,11 +333,13 @@ export async function POST(request: Request) {
       consentsToDataProcessing,
       acceptsStatuteAndProgram,
     } = parsedBody.data;
+    const displayName = getApplicationDisplayName(firstName, lastName);
 
     const [createdApplication] = await db
       .insert(mladiPiratiMembershipApplications)
       .values({
-        fullName,
+        firstName,
+        lastName,
         dateOfBirth,
         placeOfBirth,
         streetAddress,
@@ -345,7 +352,7 @@ export async function POST(request: Request) {
         motivation: motivation ?? null,
         consentsToDataProcessing,
         acceptsStatuteAndProgram,
-        status: "new",
+        status: "pending",
         rawPayload: getRawPayload(body),
       })
       .returning({
@@ -369,12 +376,12 @@ export async function POST(request: Request) {
     await sendDiscordEmbedNotification({
       title: "New Membership Application",
       description: "A new membership application is ready for review.",
-      adminPath: "/admin/membership-applications",
+      adminPath: "/admin/members/applications",
       color: 0x22c55e,
       fields: [
         {
           name: "Name",
-          value: fullName,
+          value: displayName,
           inline: true,
         },
         {
