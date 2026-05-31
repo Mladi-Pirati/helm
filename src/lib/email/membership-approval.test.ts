@@ -18,9 +18,13 @@ describe("buildMembershipApprovalEmail", () => {
     expect(email.text).toContain(
       "V ločenem Keycloak e-sporočilu boš prejel_a povezavo",
     );
+    expect(email.text).toContain("Pridruži se nam tudi na Discordu:");
+    expect(email.text).toContain("https://discord.gg/jqS7QFpc2C");
     expect(email.text).toContain("Mladi Pirati");
     expect(email.html).toContain("Živjo,");
     expect(email.html).toContain("Mladi Pirati");
+    expect(email.html).toContain("Odpri Discord");
+    expect(email.html).toContain('href="https://discord.gg/jqS7QFpc2C"');
   });
 
   test("uses the required email styling", () => {
