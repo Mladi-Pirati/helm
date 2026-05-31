@@ -96,6 +96,41 @@ export async function hasAnyPermission(...permissionKeys: string[]): Promise<boo
   return permissionKeys.some((k) => keys.has(k));
 }
 
+export async function getCurrentUserHighestRoleRank(): Promise<number | null> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return null;
+  }
+
+  const member = await db.query.members.findFirst({
+    where: eq(members.keycloakId, user.keycloakUserId),
+    columns: { id: true },
+  });
+
+  if (!member) {
+    return null;
+  }
+
+  const now = new Date();
+  const roleRanks = await db
+    .select({ rank: roles.rank })
+    .from(memberRoles)
+    .innerJoin(roles, eq(memberRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(memberRoles.memberId, member.id),
+        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
+      ),
+    );
+
+  if (!roleRanks.length) {
+    return null;
+  }
+
+  return Math.min(...roleRanks.map((role) => role.rank));
+}
+
 /**
  * Require a specific permission. Throws 403 if the user lacks it.
  * Use in server components and server actions.

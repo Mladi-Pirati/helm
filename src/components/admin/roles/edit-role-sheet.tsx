@@ -28,7 +28,6 @@ type EditableRole = {
   key: string;
   name: string;
   description: string | null;
-  rank: number;
 };
 
 export function EditRoleSheet({ role }: { role: EditableRole }) {
@@ -39,7 +38,6 @@ export function EditRoleSheet({ role }: { role: EditableRole }) {
   const defaultValues: UpdateRoleInput = {
     name: role.name,
     description: role.description ?? "",
-    rank: role.rank,
   };
   const form = useForm<UpdateRoleInput>({
     resolver: zodResolver(updateRoleSchema),
@@ -109,28 +107,6 @@ export function EditRoleSheet({ role }: { role: EditableRole }) {
               <FormLabel>Name</FormLabel>
               <FormControl>
                 <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="rank"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rank</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={1}
-                  value={field.value}
-                  onChange={(e) =>
-                    field.onChange(
-                      e.target.value === "" ? undefined : Number(e.target.value),
-                    )
-                  }
-                />
               </FormControl>
               <FormMessage />
             </FormItem>

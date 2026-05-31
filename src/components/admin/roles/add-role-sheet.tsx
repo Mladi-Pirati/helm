@@ -27,7 +27,6 @@ const defaultValues: CreateRoleInput = {
   key: "",
   name: "",
   description: "",
-  rank: 1,
 };
 
 export function AddRoleSheet() {
@@ -73,7 +72,7 @@ export function AddRoleSheet() {
   return (
     <Form {...form}>
       <FormSheet
-        description="Create a new role. Rank determines hierarchy (lower = higher priority)."
+        description="Create a new role. New roles are added at the lowest priority."
         isPending={isPending}
         onOpenChange={handleOpenChange}
         onSubmit={onSubmit}
@@ -105,28 +104,6 @@ export function AddRoleSheet() {
               <FormLabel>Name</FormLabel>
               <FormControl>
                 <Input placeholder="Admin" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="rank"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Rank</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={1}
-                  value={field.value}
-                  onChange={(e) =>
-                    field.onChange(
-                      e.target.value === "" ? undefined : Number(e.target.value),
-                    )
-                  }
-                />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -1,14 +1,18 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, max } from "drizzle-orm";
 
-import { db } from "@/db";
 import { permissions, rolePermissions, roles } from "@/db/schema";
-import { hasPermission } from "@/lib/auth/permissions";
+import {
+  db,
+  getCurrentUserHighestRoleRank,
+  hasPermission,
+} from "@/lib/roles-action-dependencies";
 import {
   createRoleSchema,
   type CreateRoleInput,
+  reorderRolesSchema,
   updateRoleSchema,
   type UpdateRoleInput,
 } from "@/lib/validation/roles";
@@ -59,22 +63,23 @@ export async function createRoleAction(
         key: fieldErrors.key?.[0],
         name: fieldErrors.name?.[0],
         description: fieldErrors.description?.[0],
-        rank: fieldErrors.rank?.[0],
       },
     };
   }
 
+  const [rankRow] = await db.select({ value: max(roles.rank) }).from(roles);
+  const rank = (rankRow.value ?? 0) + 1;
+
   try {
-    await db.insert(roles).values(parsed.data);
+    await db.insert(roles).values({ ...parsed.data, rank });
   } catch (error) {
     if (isUniqueViolation(error)) {
-      const message = "That role key or rank is already taken.";
+      const message = "That role key is already taken.";
       return {
         ok: false,
         message,
         fieldErrors: {
           key: "That role key is already taken.",
-          rank: "That rank is already taken.",
         },
       };
     }
@@ -108,7 +113,6 @@ export async function updateRoleAction(
       fieldErrors: {
         name: fieldErrors.name?.[0],
         description: fieldErrors.description?.[0],
-        rank: fieldErrors.rank?.[0],
       },
     };
   }
@@ -119,8 +123,7 @@ export async function updateRoleAction(
     if (isUniqueViolation(error)) {
       return {
         ok: false,
-        message: "That rank is already taken.",
-        fieldErrors: { rank: "That rank is already taken." },
+        message: "That role could not be updated.",
       };
     }
     throw error;
@@ -128,6 +131,66 @@ export async function updateRoleAction(
 
   revalidatePath("/admin/settings/roles");
   return { ok: true, message: "Role updated successfully." };
+}
+
+export async function reorderRolesAction(
+  roleIds: string[],
+): Promise<RoleMutationActionResult> {
+  const access = await requireAccessControlPermission();
+  if (!access.ok) return { ok: false, message: access.message };
+
+  const parsed = reorderRolesSchema.safeParse({ roleIds });
+  if (!parsed.success) return { ok: false, message: "Invalid role order." };
+
+  const rows = await db
+    .select({ id: roles.id, rank: roles.rank })
+    .from(roles)
+    .orderBy(asc(roles.rank));
+  const existingIds = new Set(rows.map((row) => row.id));
+
+  if (
+    existingIds.size !== parsed.data.roleIds.length ||
+    parsed.data.roleIds.some((id) => !existingIds.has(id))
+  ) {
+    return { ok: false, message: "Role order is out of date." };
+  }
+
+  const highestManagedRank = await getCurrentUserHighestRoleRank();
+  if (highestManagedRank === null) {
+    return {
+      ok: false,
+      message: "You cannot reorder roles without an active role.",
+    };
+  }
+
+  const lockedIds = rows
+    .filter((role) => role.rank <= highestManagedRank)
+    .map((role) => role.id);
+  const nextLockedIds = parsed.data.roleIds.slice(0, lockedIds.length);
+  if (lockedIds.some((id, index) => nextLockedIds[index] !== id)) {
+    return {
+      ok: false,
+      message: "You cannot move roles above your highest role.",
+    };
+  }
+
+  await db.transaction(async (tx) => {
+    for (const [index, roleId] of parsed.data.roleIds.entries()) {
+      await tx
+        .update(roles)
+        .set({ rank: -1000 - index })
+        .where(eq(roles.id, roleId));
+    }
+    for (const [index, roleId] of parsed.data.roleIds.entries()) {
+      await tx
+        .update(roles)
+        .set({ rank: index + 1 })
+        .where(eq(roles.id, roleId));
+    }
+  });
+
+  revalidatePath("/admin/settings/roles");
+  return { ok: true, message: "Role order saved." };
 }
 
 export async function deleteRoleAction(

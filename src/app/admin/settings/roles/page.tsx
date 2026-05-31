@@ -14,10 +14,14 @@ import {
   rolePermissions,
   roles,
 } from "@/db/schema";
-import { requirePermission } from "@/lib/auth/permissions";
+import {
+  getCurrentUserHighestRoleRank,
+  requirePermission,
+} from "@/lib/auth/permissions";
 
 export default async function AdminRolesPage() {
   await requirePermission("access-control.manage_roles");
+  const highestManagedRank = await getCurrentUserHighestRoleRank();
 
   const modulesRows = await db
     .select({
@@ -125,6 +129,7 @@ export default async function AdminRolesPage() {
         </TabsContent>
         <TabsContent className="mt-4" value="roles">
           <RolesManagement
+            highestManagedRank={highestManagedRank}
             permissions={permissionOptions}
             rows={rolesWithPermissions}
           />

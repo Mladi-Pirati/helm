@@ -23,10 +23,6 @@ const roleDetailsSchema = {
     .max(500, "Description must be 500 characters or fewer.")
     .optional()
     .or(z.literal("")),
-  rank: z
-    .number()
-    .int("Rank must be a whole number.")
-    .positive("Rank must be a positive number."),
 };
 
 export const createRoleSchema = z.object({
@@ -35,6 +31,10 @@ export const createRoleSchema = z.object({
 });
 
 export const updateRoleSchema = z.object(roleDetailsSchema);
+
+export const reorderRolesSchema = z.object({
+  roleIds: z.array(z.string().min(1)).min(1),
+});
 
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
