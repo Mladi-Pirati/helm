@@ -1,6 +1,4 @@
 import { desc } from "drizzle-orm";
-import Link from "next/link";
-import type { ReactNode } from "react";
 
 import { MembershipApplicationsManagement } from "@/components/admin/membership-applications/membership-applications-management";
 import { Button } from "@/components/ui/button";
@@ -8,38 +6,17 @@ import { db } from "@/db";
 import { mladiPiratiMembershipApplications } from "@/db/schema";
 import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 import {
-  buildMembershipApplicationsListHref,
   buildMembershipApplicationsQueryString,
   membershipApplicationStatusLabels,
   membershipApplicationStatuses,
   parseMembershipApplicationsFilters,
-  participationModeLabels,
-  participationModes,
   type MembershipApplicationsSearchParams,
   type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 import { buildMembershipApplicationsWhere } from "@/lib/membership-applications-query";
 
-function FilterSelect({
-  children,
-  defaultValue,
-  name,
-}: {
-  children: ReactNode;
-  defaultValue?: string;
-  name: string;
-}) {
-  return (
-    <select
-      className="h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-      defaultValue={defaultValue ?? ""}
-      name={name}
-    >
-      {children}
-    </select>
-  );
-}
+import { FilterSelect } from "./filter-select";
 
 export default async function AdminMembershipApplicationsPage({
   searchParams,
@@ -104,7 +81,7 @@ export default async function AdminMembershipApplicationsPage({
         </div>
       </div>
 
-      <form className="grid gap-3 rounded-none border p-4 sm:grid-cols-4">
+      <form className="grid gap-3 rounded-none border p-4 sm:grid-cols-3">
         <input
           className="h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 sm:col-span-2"
           defaultValue={filters.q}
@@ -112,28 +89,15 @@ export default async function AdminMembershipApplicationsPage({
           placeholder="Search by name, email, city, or phone"
           type="search"
         />
-        <FilterSelect defaultValue={filters.status} name="status">
-          <option value="">All statuses</option>
-          {membershipApplicationStatuses.map((status) => (
-            <option key={status} value={status}>
-              {membershipApplicationStatusLabels[status]}
-            </option>
-          ))}
-        </FilterSelect>
-        <FilterSelect defaultValue={filters.mode} name="mode">
-          <option value="">All participation modes</option>
-          {participationModes.map((mode) => (
-            <option key={mode} value={mode}>
-              {participationModeLabels[mode]}
-            </option>
-          ))}
-        </FilterSelect>
-        <div className="flex gap-2 sm:col-span-4">
-          <Button type="submit">Apply filters</Button>
-          <Button asChild variant="outline">
-            <Link href={buildMembershipApplicationsListHref("")}>Clear</Link>
-          </Button>
-        </div>
+        <FilterSelect
+          defaultValue={filters.status}
+          name="status"
+          options={membershipApplicationStatuses.map((status) => ({
+            label: membershipApplicationStatusLabels[status],
+            value: status,
+          }))}
+          placeholder="All statuses"
+        />
       </form>
 
       <MembershipApplicationsManagement

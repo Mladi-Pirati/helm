@@ -37,12 +37,6 @@ export function buildMembershipApplicationsWhere(
     );
   }
 
-  if (filters.mode) {
-    whereClauses.push(
-      eq(mladiPiratiMembershipApplications.participationMode, filters.mode),
-    );
-  }
-
   if (whereClauses.length === 0) {
     return undefined;
   }

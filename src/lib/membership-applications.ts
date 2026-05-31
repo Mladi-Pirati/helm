@@ -67,13 +67,11 @@ export type BulkMembershipApplicationAction =
 export type MembershipApplicationsSearchParams = {
   q?: string | string[] | undefined;
   status?: string | string[] | undefined;
-  mode?: string | string[] | undefined;
 };
 
 export type MembershipApplicationsListFilters = {
   q: string;
   status?: MembershipApplicationStatus;
-  mode?: ParticipationMode;
 };
 
 function getSingleSearchParam(
@@ -90,23 +88,20 @@ export function isMembershipApplicationStatus(
   );
 }
 
-export function isParticipationMode(
-  value: string | undefined,
-): value is ParticipationMode {
-  return participationModes.includes(value as ParticipationMode);
-}
-
 export function parseMembershipApplicationsFilters(
   rawSearchParams: MembershipApplicationsSearchParams,
 ): MembershipApplicationsListFilters {
   const q = getSingleSearchParam(rawSearchParams.q)?.trim() ?? "";
   const status = getSingleSearchParam(rawSearchParams.status);
-  const mode = getSingleSearchParam(rawSearchParams.mode);
 
   return {
     q,
-    status: isMembershipApplicationStatus(status) ? status : undefined,
-    mode: isParticipationMode(mode) ? mode : undefined,
+    status:
+      status === undefined
+        ? "pending"
+        : isMembershipApplicationStatus(status)
+          ? status
+          : undefined,
   };
 }
 
@@ -121,10 +116,6 @@ export function buildMembershipApplicationsQueryString(
 
   if (filters.status) {
     searchParams.set("status", filters.status);
-  }
-
-  if (filters.mode) {
-    searchParams.set("mode", filters.mode);
   }
 
   return searchParams.toString();

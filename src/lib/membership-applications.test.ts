@@ -6,6 +6,7 @@ import {
   formatPendingMembershipApplicationCount,
   getRejectionReasonWordCount,
   hasValidRejectionReason,
+  parseMembershipApplicationsFilters,
 } from "./membership-applications";
 
 describe("membership application rejection reasons", () => {
@@ -28,6 +29,22 @@ describe("pending membership application count", () => {
     expect(formatPendingMembershipApplicationCount(1)).toBe("1");
     expect(formatPendingMembershipApplicationCount(99)).toBe("99");
     expect(formatPendingMembershipApplicationCount(100)).toBe("99+");
+  });
+});
+
+describe("membership application list filters", () => {
+  test("defaults status filtering to pending when status is absent", () => {
+    expect(parseMembershipApplicationsFilters({})).toMatchObject({
+      q: "",
+      status: "pending",
+    });
+  });
+
+  test("keeps all statuses selectable with an empty status value", () => {
+    expect(parseMembershipApplicationsFilters({ status: "" })).toMatchObject({
+      q: "",
+      status: undefined,
+    });
   });
 });
 
