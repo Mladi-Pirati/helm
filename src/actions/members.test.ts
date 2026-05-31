@@ -623,14 +623,12 @@ describe("deleteMemberAction", () => {
   });
 });
 
-describe("bulkResendWelcomeEmailAction", () => {
+describe("resendWelcomeEmailAction", () => {
   test("rejects users without member update permission", async () => {
     allowed = false;
-    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+    const { resendWelcomeEmailAction } = await membersActionsPromise;
 
-    await expect(
-      bulkResendWelcomeEmailAction({ memberIds: ["member-1"] }),
-    ).resolves.toEqual({
+    await expect(resendWelcomeEmailAction("member-1")).resolves.toEqual({
       ok: false,
       message: "You are not allowed to manage members.",
     });
@@ -640,82 +638,73 @@ describe("bulkResendWelcomeEmailAction", () => {
   test("rejects users without the globally highest-ranked role", async () => {
     currentUserHighestRoleRank = 2;
     highestRoleRank = 1;
-    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+    const { resendWelcomeEmailAction } = await membersActionsPromise;
 
-    await expect(
-      bulkResendWelcomeEmailAction({ memberIds: ["member-1"] }),
-    ).resolves.toEqual({
+    await expect(resendWelcomeEmailAction("member-1")).resolves.toEqual({
       ok: false,
       message: "Only members with the highest-ranked role can resend welcome emails.",
     });
     expect(sentWelcomeEmails).toEqual([]);
   });
 
-  test("sends one welcome email per selected member with a single recipient", async () => {
+  test("sends one welcome email to one member with a single recipient", async () => {
     bulkResendRows = [
       {
         email: "ana@example.test",
         firstName: "Ana",
         id: "member-1",
         lastName: "Novak",
-      },
-      {
-        email: "bine@example.test",
-        firstName: "Bine",
-        id: "member-2",
-        lastName: "Kranjc",
       },
     ];
-    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
+    const { resendWelcomeEmailAction } = await membersActionsPromise;
 
-    await expect(
-      bulkResendWelcomeEmailAction({
-        memberIds: ["member-1", "member-2", "member-1"],
-      }),
-    ).resolves.toMatchObject({
+    await expect(resendWelcomeEmailAction("member-1")).resolves.toMatchObject({
       ok: true,
-      affectedCount: 2,
-      failedCount: 0,
-      notFoundCount: 0,
-      sentCount: 2,
-      skippedMissingEmailCount: 0,
+      message: "Welcome email resent to Ana Novak.",
     });
-    expect(sentWelcomeEmails).toHaveLength(2);
-    expect(sentWelcomeEmails.map((email) => email.email)).toEqual([
-      "ana@example.test",
-      "bine@example.test",
-    ]);
-    expect(
-      sentWelcomeEmails.every((email) => typeof email.email === "string"),
-    ).toBe(true);
-    expect(
-      sentWelcomeEmails.every((email) =>
-        email.idempotencyKey.startsWith(
-          `membership-welcome-resend/${email.memberId}/`,
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      sentWelcomeEmails.some((email) =>
-        email.idempotencyKey.startsWith("membership-approval/"),
-      ),
-    ).toBe(false);
-  });
-
-  test("reports skipped missing emails, not-found members, and partial failures", async () => {
-    bulkResendRows = [
+    expect(sentWelcomeEmails).toEqual([
       {
         email: "ana@example.test",
         firstName: "Ana",
-        id: "member-1",
-        lastName: "Novak",
+        idempotencyKey: sentWelcomeEmails[0]?.idempotencyKey,
+        memberId: "member-1",
       },
+    ]);
+    expect(sentWelcomeEmails[0]?.idempotencyKey).toStartWith(
+      "membership-welcome-resend/member-1/",
+    );
+    expect(sentWelcomeEmails[0]?.idempotencyKey).not.toStartWith(
+      "membership-approval/",
+    );
+  });
+
+  test("rejects members without a primary email", async () => {
+    bulkResendRows = [
       {
         email: null,
         firstName: "Bine",
         id: "member-2",
         lastName: "Kranjc",
       },
+    ];
+    const { resendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(resendWelcomeEmailAction("member-2")).resolves.toEqual({
+      ok: false,
+      message: "That member does not have a primary email address.",
+    });
+    expect(sentWelcomeEmails).toEqual([]);
+  });
+
+  test("reports not-found members and send failures", async () => {
+    const { resendWelcomeEmailAction } = await membersActionsPromise;
+
+    await expect(resendWelcomeEmailAction("missing-member")).resolves.toEqual({
+      ok: false,
+      message: "That member could not be found.",
+    });
+
+    bulkResendRows = [
       {
         email: "cilka@example.test",
         firstName: "Cilka",
@@ -724,24 +713,12 @@ describe("bulkResendWelcomeEmailAction", () => {
       },
     ];
     failingWelcomeEmailAddresses.add("cilka@example.test");
-    const { bulkResendWelcomeEmailAction } = await membersActionsPromise;
 
-    await expect(
-      bulkResendWelcomeEmailAction({
-        memberIds: ["member-1", "member-2", "member-3", "missing-member"],
-      }),
-    ).resolves.toEqual({
-      ok: true,
-      affectedCount: 3,
-      failedCount: 1,
-      message:
-        "Sent 1 welcome email. 1 failed, 1 skipped without a primary email, and 1 selected member was not found.",
-      notFoundCount: 1,
-      sentCount: 1,
-      skippedMissingEmailCount: 1,
+    await expect(resendWelcomeEmailAction("member-3")).resolves.toEqual({
+      ok: false,
+      message: "Unable to resend the welcome email right now.",
     });
     expect(sentWelcomeEmails.map((email) => email.email)).toEqual([
-      "ana@example.test",
       "cilka@example.test",
     ]);
   });

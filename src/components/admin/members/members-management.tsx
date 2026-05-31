@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -9,7 +9,6 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
-  type RowSelectionState,
 } from "@tanstack/react-table";
 import {
   ArrowDownAZIcon,
@@ -23,8 +22,8 @@ import {
 } from "lucide-react";
 
 import {
-  bulkResendWelcomeEmailAction,
   createMemberAction,
+  resendWelcomeEmailAction,
   searchKeycloakUsersAction,
 } from "@/actions/members";
 import {
@@ -35,6 +34,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,12 +55,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -736,50 +730,23 @@ function getMemberDisplayName(row: MemberListRow) {
   return `${row.firstName} ${row.lastName}`.trim() || row.username;
 }
 
-function getMemberPreview(rows: MemberListRow[]) {
-  const preview = rows
-    .slice(0, 3)
-    .map((row) => getMemberDisplayName(row))
-    .join(", ");
-
-  if (rows.length <= 3) return preview;
-  return `${preview}, and ${rows.length - 3} more`;
-}
-
-function BulkResendWelcomeEmailDialog({
-  onOpenChange,
-  onSuccess,
-  open,
-  rows,
-}: {
-  onOpenChange: (open: boolean) => void;
-  onSuccess: (message: string) => void;
-  open: boolean;
-  rows: MemberListRow[];
-}) {
+function ResendWelcomeEmailDialog({ row }: { row: MemberListRow }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
   const [serverMessage, setServerMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const selectedCount = rows.length;
-  const canSubmit = selectedCount > 0;
+  const memberName = getMemberDisplayName(row);
 
   function handleOpenChange(nextOpen: boolean) {
-    onOpenChange(nextOpen);
+    setOpen(nextOpen);
     if (!nextOpen) setServerMessage(null);
   }
 
   function handleConfirm() {
     setServerMessage(null);
 
-    if (!canSubmit) {
-      setServerMessage("Select at least one member.");
-      return;
-    }
-
     startTransition(async () => {
-      const result = await bulkResendWelcomeEmailAction({
-        memberIds: rows.map((row) => row.id),
-      });
+      const result = await resendWelcomeEmailAction(row.id);
 
       if (!result.ok) {
         setServerMessage(result.message);
@@ -787,26 +754,39 @@ function BulkResendWelcomeEmailDialog({
       }
 
       handleOpenChange(false);
-      onSuccess(result.message);
       router.refresh();
     });
   }
 
   return (
     <AlertDialog onOpenChange={handleOpenChange} open={open}>
+      <AlertDialogTrigger asChild>
+        <Button
+          aria-label={`Resend welcome email to ${memberName}`}
+          disabled={!row.primaryEmail}
+          size="xs"
+          title={
+            row.primaryEmail
+              ? `Resend welcome email to ${memberName}`
+              : "Member has no primary email"
+          }
+          type="button"
+          variant="outline"
+        >
+          <MailIcon className="size-3.5" />
+          Email
+        </Button>
+      </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Resend welcome email?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will send the welcome email separately to each selected member
-            with a primary email address.
+            This will send the welcome email to {memberName}.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {selectedCount ? (
-          <p className="text-xs text-muted-foreground">
-            Selected: {getMemberPreview(rows)}
-          </p>
-        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Recipient: {row.primaryEmail ?? "No primary email"}
+        </p>
         {serverMessage ? (
           <p className="text-xs font-medium text-destructive">
             {serverMessage}
@@ -814,7 +794,7 @@ function BulkResendWelcomeEmailDialog({
         ) : null}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <Button disabled={isPending || !canSubmit} onClick={handleConfirm}>
+          <Button disabled={isPending || !row.primaryEmail} onClick={handleConfirm}>
             {isPending ? "Sending..." : "Resend welcome email"}
           </Button>
         </AlertDialogFooter>
@@ -851,47 +831,7 @@ export function MembersManagement({
   totalCount: number;
 }) {
   const router = useRouter();
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [bulkResendOpen, setBulkResendOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    kind: "error" | "success";
-    message: string;
-  } | null>(null);
   const columns: ColumnDef<MemberListRow>[] = [
-    ...(canResendWelcomeEmail
-      ? [
-          {
-            id: "select",
-            header: ({ table }) => (
-              <Checkbox
-                aria-label="Select all visible members"
-                checked={
-                  table.getIsAllRowsSelected()
-                    ? true
-                    : table.getIsSomeRowsSelected()
-                      ? "indeterminate"
-                      : false
-                }
-                onCheckedChange={(value) => {
-                  table.toggleAllRowsSelected(!!value);
-                  setFeedback(null);
-                }}
-              />
-            ),
-            size: 44,
-            cell: ({ row }) => (
-              <Checkbox
-                aria-label={`Select member ${getMemberDisplayName(row.original)}`}
-                checked={row.getIsSelected()}
-                onCheckedChange={(value) => {
-                  row.toggleSelected(!!value);
-                  setFeedback(null);
-                }}
-              />
-            ),
-          } satisfies ColumnDef<MemberListRow>,
-        ]
-      : []),
     {
       id: "member",
       header: () => {
@@ -997,9 +937,12 @@ export function MembersManagement({
     {
       id: "actions",
       header: () => <span className="block text-right">Actions</span>,
-      size: 96,
+      size: canResendWelcomeEmail ? 176 : 96,
       cell: ({ row }) => (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {canResendWelcomeEmail ? (
+            <ResendWelcomeEmailDialog row={row.original} />
+          ) : null}
           <Button asChild size="xs" variant="outline">
             <Link href={`/admin/members/${row.original.id}`}>Open</Link>
           </Button>
@@ -1012,31 +955,9 @@ export function MembersManagement({
   const table = useReactTable({
     columns,
     data: rows,
-    enableRowSelection: canResendWelcomeEmail,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => row.id,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      rowSelection,
-    },
   });
-  const selectedRows = table
-    .getSelectedRowModel()
-    .rows.map((row) => row.original);
-  const selectedCount = selectedRows.length;
-  const hasSelection = selectedCount > 0;
-
-  useEffect(() => {
-    setRowSelection({});
-  }, [rows]);
-
-  function handleBulkSuccess(message: string) {
-    setFeedback({
-      kind: "success",
-      message,
-    });
-    setRowSelection({});
-  }
 
   return (
     <Card>
@@ -1052,51 +973,6 @@ export function MembersManagement({
         </div>
       </CardHeader>
       <CardContent className="px-0">
-        {canResendWelcomeEmail ? (
-          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-h-4">
-              {feedback ? (
-                <p
-                  className={
-                    feedback.kind === "error"
-                      ? "text-xs font-medium text-destructive"
-                      : "text-xs text-muted-foreground"
-                  }
-                >
-                  {feedback.message}
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  {selectedCount
-                    ? `${selectedCount} selected`
-                    : "Select members to use bulk actions."}
-                </p>
-              )}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button disabled={!hasSelection} size="xs" type="button">
-                  Bulk actions
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={!hasSelection}
-                  onSelect={() => setBulkResendOpen(true)}
-                >
-                  <MailIcon className="size-3.5" />
-                  Resend welcome email
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <BulkResendWelcomeEmailDialog
-              onOpenChange={setBulkResendOpen}
-              onSuccess={handleBulkSuccess}
-              open={bulkResendOpen}
-              rows={selectedRows}
-            />
-          </div>
-        ) : null}
         <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

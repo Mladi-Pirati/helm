@@ -40,21 +40,22 @@ describe("members management table implementation", () => {
     expect(source).toContain("Roles");
   });
 
-  test("wires row selection to the welcome email bulk action", () => {
+  test("wires each row to an individual welcome email resend action", () => {
     const source = readFileSync(
       "src/components/admin/members/members-management.tsx",
       "utf8",
     );
 
-    expect(source).toContain("type RowSelectionState");
-    expect(source).toContain("enableRowSelection: canResendWelcomeEmail");
-    expect(source).toContain("Select all visible members");
-    expect(source).toContain("Select member");
-    expect(source).toContain("DropdownMenu");
-    expect(source).toContain("Bulk actions");
+    expect(source).toContain("ResendWelcomeEmailDialog");
+    expect(source).toContain("resendWelcomeEmailAction");
     expect(source).toContain("Resend welcome email");
-    expect(source).toContain("BulkResendWelcomeEmailDialog");
-    expect(source).toContain("bulkResendWelcomeEmailAction");
+    expect(source).not.toContain("type RowSelectionState");
+    expect(source).not.toContain("enableRowSelection");
+    expect(source).not.toContain("Select all visible members");
+    expect(source).not.toContain("Select member");
+    expect(source).not.toContain("Bulk actions");
+    expect(source).not.toContain("BulkResendWelcomeEmailDialog");
+    expect(source).not.toContain("bulkResendWelcomeEmailAction");
   });
 
   test("keeps table headers visible when there are no rows", () => {

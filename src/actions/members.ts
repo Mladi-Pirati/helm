@@ -71,15 +71,8 @@ const deleteMemberSchema = z.object({
   mode: z.enum(["local", "local-and-keycloak", "local-and-revoke-helm"]),
 });
 
-const bulkResendWelcomeEmailSchema = z.object({
-  memberIds: z
-    .array(z.string())
-    .transform((memberIds) => [
-      ...new Set(memberIds.map((memberId) => memberId.trim()).filter(Boolean)),
-    ])
-    .refine((memberIds) => memberIds.length > 0, {
-      message: "Select at least one member.",
-    }),
+const resendWelcomeEmailSchema = z.object({
+  memberId: z.string().trim().min(1, "Member id is required."),
 });
 
 export type DeleteMemberMode = z.infer<typeof deleteMemberSchema>["mode"];
@@ -95,18 +88,6 @@ type DbExecutor = {
   select: typeof db.select;
   update: typeof db.update;
 };
-
-type BulkResendWelcomeEmailResult =
-  | {
-      ok: true;
-      affectedCount: number;
-      failedCount: number;
-      message: string;
-      notFoundCount: number;
-      sentCount: number;
-      skippedMissingEmailCount: number;
-    }
-  | ActionFailure;
 
 function getErrorLogDetails(error: unknown): MembersSyncLogDetails {
   if (typeof error !== "object" || error === null) {
@@ -415,46 +396,6 @@ function revalidateMembers(memberId?: string) {
   if (memberId) revalidatePath(`/admin/members/${memberId}`);
 }
 
-function formatCount(count: number, singular: string, plural = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function buildBulkResendWelcomeEmailMessage({
-  failedCount,
-  notFoundCount,
-  sentCount,
-  skippedMissingEmailCount,
-}: {
-  failedCount: number;
-  notFoundCount: number;
-  sentCount: number;
-  skippedMissingEmailCount: number;
-}) {
-  const details: string[] = [];
-
-  if (failedCount) details.push(`${failedCount} failed`);
-  if (skippedMissingEmailCount) {
-    details.push(
-      `${skippedMissingEmailCount} skipped without a primary email`,
-    );
-  }
-  if (notFoundCount) {
-    details.push(
-      `${notFoundCount} selected ${notFoundCount === 1 ? "member was" : "members were"} not found`,
-    );
-  }
-
-  const sentMessage = `Sent ${formatCount(sentCount, "welcome email")}.`;
-  if (!details.length) return sentMessage;
-
-  const detailMessage =
-    details.length === 1
-      ? details[0]
-      : `${details.slice(0, -1).join(", ")}, and ${details.at(-1)}`;
-
-  return `${sentMessage} ${detailMessage}.`;
-}
-
 async function requireHighestRankedRoleForWelcomeEmail() {
   const [currentRank, highestRank] = await Promise.all([
     getCurrentUserHighestRoleRank(),
@@ -476,31 +417,42 @@ async function requireHighestRankedRoleForWelcomeEmail() {
   return { ok: true as const };
 }
 
-export async function bulkResendWelcomeEmailAction(values: {
-  memberIds: string[];
-}): Promise<BulkResendWelcomeEmailResult> {
+function getMemberDisplayName(member: {
+  firstName: string;
+  lastName: string;
+  username?: string;
+}) {
+  return (
+    `${member.firstName} ${member.lastName}`.trim() ||
+    member.username ||
+    "member"
+  );
+}
+
+export async function resendWelcomeEmailAction(
+  memberId: string,
+): Promise<ActionResult> {
   const access = await requireMembersPermission("members.update");
   if (!access.ok) return access;
 
   const rankAccess = await requireHighestRankedRoleForWelcomeEmail();
   if (!rankAccess.ok) return rankAccess;
 
-  const parsed = bulkResendWelcomeEmailSchema.safeParse(values);
+  const parsed = resendWelcomeEmailSchema.safeParse({ memberId });
   if (!parsed.success) {
     return {
       ok: false,
-      message:
-        parsed.error.issues[0]?.message ?? "Select at least one member.",
+      message: parsed.error.issues[0]?.message ?? "Member id is required.",
     };
   }
 
-  const memberIds = parsed.data.memberIds;
   const rows = await db
     .select({
       email: contacts.value,
       firstName: members.firstName,
       id: members.id,
       lastName: members.lastName,
+      username: members.username,
     })
     .from(members)
     .leftJoin(
@@ -511,51 +463,40 @@ export async function bulkResendWelcomeEmailAction(values: {
         eq(contacts.isPrimary, true),
       ),
     )
-    .where(inArray(members.id, memberIds))
-    .orderBy(asc(members.firstName), asc(members.lastName), asc(members.id));
+    .where(eq(members.id, parsed.data.memberId))
+    .orderBy(asc(members.id));
+  const member = rows[0];
 
-  const notFoundCount = memberIds.length - rows.length;
-  let sentCount = 0;
-  let failedCount = 0;
-  let skippedMissingEmailCount = 0;
-
-  for (const row of rows) {
-    const email = row.email?.trim();
-
-    if (!email) {
-      skippedMissingEmailCount += 1;
-      continue;
-    }
-
-    const sent = await sendMembershipWelcomeEmail({
-      email,
-      firstName: row.firstName,
-      idempotencyKey: `membership-welcome-resend/${row.id}/${crypto.randomUUID()}`,
-      memberId: row.id,
-    });
-
-    if (sent) {
-      sentCount += 1;
-    } else {
-      failedCount += 1;
-    }
+  if (!member) {
+    return { ok: false, message: "That member could not be found." };
   }
 
-  revalidateMembers();
+  const email = member.email?.trim();
+  if (!email) {
+    return {
+      ok: false,
+      message: "That member does not have a primary email address.",
+    };
+  }
 
+  const sent = await sendMembershipWelcomeEmail({
+    email,
+    firstName: member.firstName,
+    idempotencyKey: `membership-welcome-resend/${member.id}/${crypto.randomUUID()}`,
+    memberId: member.id,
+  });
+
+  if (!sent) {
+    return {
+      ok: false,
+      message: "Unable to resend the welcome email right now.",
+    };
+  }
+
+  revalidateMembers(member.id);
   return {
     ok: true,
-    affectedCount: rows.length,
-    failedCount,
-    message: buildBulkResendWelcomeEmailMessage({
-      failedCount,
-      notFoundCount,
-      sentCount,
-      skippedMissingEmailCount,
-    }),
-    notFoundCount,
-    sentCount,
-    skippedMissingEmailCount,
+    message: `Welcome email resent to ${getMemberDisplayName(member)}.`,
   };
 }
 
@@ -657,7 +598,7 @@ export async function createMemberAction(
     if ("fieldError" in resolvedKeycloakUser) {
       return {
         ok: false,
-        message: resolvedKeycloakUser.fieldError,
+        message: resolvedKeycloakUser.fieldError || "Internal error",
         fieldErrors: {
           username: resolvedKeycloakUser.fieldError,
         },
