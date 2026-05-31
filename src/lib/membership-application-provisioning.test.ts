@@ -6,6 +6,10 @@ import {
   type MembershipApplicationProvisioningKeycloak,
   type MembershipApplicationProvisioningRepository,
 } from "@/lib/membership-application-provisioning";
+import type {
+  MembershipApprovalEmailInput,
+  MembershipApprovalEmailSender,
+} from "@/lib/email/membership-approval";
 import type { KeycloakUser } from "@/lib/keycloak/admin-client";
 
 const application = {
@@ -80,6 +84,20 @@ function createRepositoryDouble() {
   return { createdProfiles, repository };
 }
 
+function createApprovalEmailDouble(
+  send: MembershipApprovalEmailSender["send"] = async () => true,
+) {
+  const approvalEmails: MembershipApprovalEmailInput[] = [];
+  const approvalEmail: MembershipApprovalEmailSender = {
+    async send(input) {
+      approvalEmails.push(input);
+      return send(input);
+    },
+  };
+
+  return { approvalEmail, approvalEmails };
+}
+
 describe("membership application username generation", () => {
   test("normalizes names into a lowercase dot-separated username base", () => {
     expect(
@@ -99,10 +117,12 @@ describe("provisionMembershipApplicationMember", () => {
     const { createdUsers, keycloak, requiredActionsEmails } =
       createKeycloakDouble();
     const { createdProfiles, repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble();
     const now = new Date("2026-05-29T10:15:00.000Z");
 
     await expect(
       provisionMembershipApplicationMember(application, {
+        approvalEmail,
         keycloak,
         now: () => now,
         repository,
@@ -143,6 +163,13 @@ describe("provisionMembershipApplicationMember", () => {
         userId: "created-keycloak-id",
       },
     ]);
+    expect(approvalEmails).toEqual([
+      {
+        applicationId: "application-1",
+        email: "ana@example.test",
+        firstName: "Ana Marija",
+      },
+    ]);
   });
 
   test("reuses an exact Keycloak email match instead of creating a duplicate user", async () => {
@@ -162,8 +189,10 @@ describe("provisionMembershipApplicationMember", () => {
       },
     });
     const { createdProfiles, repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble();
 
     await provisionMembershipApplicationMember(application, {
+      approvalEmail,
       keycloak,
       repository,
     });
@@ -174,6 +203,13 @@ describe("provisionMembershipApplicationMember", () => {
       username: "existing.ana",
     });
     expect(requiredActionsEmails).toEqual([]);
+    expect(approvalEmails).toEqual([
+      {
+        applicationId: "application-1",
+        email: "ana@example.test",
+        firstName: "Ana Marija",
+      },
+    ]);
   });
 
   test("sends setup actions for an existing Keycloak email match when email is unverified", async () => {
@@ -192,8 +228,10 @@ describe("provisionMembershipApplicationMember", () => {
       },
     });
     const { repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble();
 
     await provisionMembershipApplicationMember(application, {
+      approvalEmail,
       keycloak,
       repository,
     });
@@ -202,6 +240,13 @@ describe("provisionMembershipApplicationMember", () => {
       {
         actions: ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
         userId: "existing-keycloak-id",
+      },
+    ]);
+    expect(approvalEmails).toEqual([
+      {
+        applicationId: "application-1",
+        email: "ana@example.test",
+        firstName: "Ana Marija",
       },
     ]);
   });
@@ -232,8 +277,10 @@ describe("provisionMembershipApplicationMember", () => {
       },
     });
     const { repository } = createRepositoryDouble();
+    const { approvalEmail } = createApprovalEmailDouble();
 
     await provisionMembershipApplicationMember(application, {
+      approvalEmail,
       keycloak,
       repository,
     });
@@ -257,6 +304,7 @@ describe("provisionMembershipApplicationMember", () => {
       },
     });
     const { repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble();
     repository.findLocalMemberProvisioningStateByKeycloakId = async () => ({
       hasAddress: true,
       hasMembership: true,
@@ -266,6 +314,7 @@ describe("provisionMembershipApplicationMember", () => {
 
     await expect(
       provisionMembershipApplicationMember(application, {
+        approvalEmail,
         keycloak,
         repository,
       }),
@@ -275,6 +324,51 @@ describe("provisionMembershipApplicationMember", () => {
       status: "success",
     });
     expect(createdUsers).toEqual([]);
+    expect(approvalEmails).toEqual([]);
+  });
+
+  test("does not reject when the approval email sender reports failure", async () => {
+    const { keycloak } = createKeycloakDouble();
+    const { repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble(
+      async () => false,
+    );
+
+    await expect(
+      provisionMembershipApplicationMember(application, {
+        approvalEmail,
+        keycloak,
+        repository,
+      }),
+    ).resolves.toEqual({
+      keycloakId: "created-keycloak-id",
+      memberId: "member-1",
+      status: "success",
+    });
+    expect(approvalEmails).toHaveLength(1);
+  });
+
+  test("does not reject when the approval email request fails", async () => {
+    const { keycloak } = createKeycloakDouble();
+    const { repository } = createRepositoryDouble();
+    const { approvalEmail, approvalEmails } = createApprovalEmailDouble(
+      async () => {
+        throw new Error("Network unavailable");
+      },
+    );
+
+    await expect(
+      provisionMembershipApplicationMember(application, {
+        approvalEmail,
+        keycloak,
+        repository,
+      }),
+    ).resolves.toEqual({
+      keycloakId: "created-keycloak-id",
+      memberId: "member-1",
+      status: "success",
+    });
+    expect(approvalEmails).toHaveLength(1);
   });
 
   test("fails safely when a local member exists without the full generated profile", async () => {

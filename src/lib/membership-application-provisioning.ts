@@ -13,6 +13,10 @@ import {
   type KeycloakUser,
   type KeycloakUserCreate,
 } from "@/lib/keycloak/admin-client";
+import {
+  sendMembershipApprovalEmail,
+  type MembershipApprovalEmailSender,
+} from "@/lib/email/membership-approval";
 
 const REQUIRED_KEYCLOAK_ACTIONS: KeycloakRequiredAction[] = [
   "VERIFY_EMAIL",
@@ -74,6 +78,7 @@ export type MembershipApplicationProvisioningRepository = {
 };
 
 export type MembershipApplicationProvisioningDependencies = {
+  approvalEmail?: MembershipApprovalEmailSender;
   keycloak?: MembershipApplicationProvisioningKeycloak;
   now?: () => Date;
   repository?: MembershipApplicationProvisioningRepository;
@@ -101,6 +106,9 @@ export async function provisionMembershipApplicationMember(
   const keycloak = dependencies.keycloak ?? createKeycloakAdminClient();
   const repository =
     dependencies.repository ?? createMembershipApplicationProvisioningRepository();
+  const approvalEmail = dependencies.approvalEmail ?? {
+    send: sendMembershipApprovalEmail,
+  };
   const now = dependencies.now ?? (() => new Date());
   const email = application.email.trim().toLowerCase();
   const existingKeycloakUser = await keycloak.findUserByEmail(email);
@@ -110,13 +118,15 @@ export async function provisionMembershipApplicationMember(
       email,
       firstName: application.firstName,
       lastName: application.lastName,
-        username: await resolveAvailableUsername(application, keycloak),
-      }));
+      username: await resolveAvailableUsername(application, keycloak),
+    }));
   const shouldSendRequiredActions =
     !existingKeycloakUser || !existingKeycloakUser.emailVerified;
 
   const existingLocalMember =
-    await repository.findLocalMemberProvisioningStateByKeycloakId(keycloakUser.id);
+    await repository.findLocalMemberProvisioningStateByKeycloakId(
+      keycloakUser.id,
+    );
 
   if (existingLocalMember) {
     if (isFullyProvisioned(existingLocalMember)) {
@@ -161,11 +171,34 @@ export async function provisionMembershipApplicationMember(
     );
   }
 
+  await sendApprovalEmailSafely(approvalEmail, {
+    applicationId: application.id,
+    email,
+    firstName: application.firstName,
+  });
+
   return {
     keycloakId: keycloakUser.id,
     memberId: member.memberId,
     status: "success" as const,
   };
+}
+
+async function sendApprovalEmailSafely(
+  approvalEmail: MembershipApprovalEmailSender,
+  input: Parameters<MembershipApprovalEmailSender["send"]>[0],
+) {
+  try {
+    await approvalEmail.send(input);
+  } catch (error) {
+    console.error("[membership-approval-email]", {
+      applicationId: input.applicationId,
+      error:
+        error instanceof Error
+          ? { message: error.message, name: error.name }
+          : String(error),
+    });
+  }
 }
 
 async function resolveAvailableUsername(
