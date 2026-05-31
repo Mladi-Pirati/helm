@@ -24,7 +24,7 @@ RUN DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/helm \
 FROM deps AS migrator
 
 COPY . .
-CMD ["bun", "run", "db:migrate"]
+CMD ["bun", "run", "db:deploy"]
 
 FROM node:22-bookworm-slim AS runner
 
