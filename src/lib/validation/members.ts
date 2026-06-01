@@ -135,21 +135,9 @@ export const membershipRenewalSchema = z
 
 export const roleAssignmentSchema = z
   .object({
-    expiresAt: z.string().trim().optional().or(z.literal("")),
     roleId: trimmedRequired("Role", 160),
   })
-  .superRefine((value, context) => {
-    if (!value.expiresAt) return;
-
-    const expiresAt = new Date(value.expiresAt);
-    if (Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
-      context.addIssue({
-        code: "custom",
-        message: "Role expiry must be a future date.",
-        path: ["expiresAt"],
-      });
-    }
-  });
+  .strict();
 
 export const reorderContactsSchema = z.object({
   contactIds: z.array(trimmedRequired("Contact id", 160)).min(1),

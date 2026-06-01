@@ -62,21 +62,21 @@ describe("member validation", () => {
     );
   });
 
-  test("requires role expiry dates to be in the future when present", () => {
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  test("validates role assignments by role id only", () => {
     expect(
-      roleAssignmentSchema.safeParse({
-        expiresAt: yesterday,
-        roleId: "role-1",
-      }).success,
-    ).toBe(false);
+      roleAssignmentSchema.parse({
+        roleId: " role-1 ",
+      }),
+    ).toEqual({
+      roleId: "role-1",
+    });
 
     expect(
       roleAssignmentSchema.safeParse({
-        expiresAt: "",
+        expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
         roleId: "role-1",
       }).success,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("validates contact, address, profile, and renewal payloads", () => {

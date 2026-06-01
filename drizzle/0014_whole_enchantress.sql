@@ -1,0 +1,1 @@
+ALTER TABLE "member_roles" DROP COLUMN "expires_at";

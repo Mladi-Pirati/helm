@@ -7,7 +7,12 @@ import { useRouter } from "next/navigation";
 import { DragDropProvider } from "@dnd-kit/react";
 import { useSortable } from "@dnd-kit/react/sortable";
 import { move } from "@dnd-kit/helpers";
-import { GripVerticalIcon, RotateCwIcon, Trash2Icon } from "lucide-react";
+import {
+  GripVerticalIcon,
+  LockIcon,
+  RotateCwIcon,
+  Trash2Icon,
+} from "lucide-react";
 
 import { setMemberApplicationAccessAction } from "@/actions/access-applications";
 import {
@@ -17,10 +22,10 @@ import {
   deleteMemberAction,
   endMembershipAction,
   reorderContactsAction,
+  setMemberRoleAssignmentAction,
   setMemberDisabledAction,
   syncMemberFromKeycloakAction,
   updateMemberProfileAction,
-  updateMemberRolesAction,
   upsertAddressAction,
   upsertContactAction,
   type DeleteMemberMode,
@@ -38,7 +43,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -61,11 +65,10 @@ type RoleOption = {
   id: string;
   key: string;
   name: string;
+  rank: number;
 };
 
-type AssignedRole = RoleOption & {
-  expiresAt: string | null;
-};
+type AssignedRole = RoleOption;
 
 type ApplicationOption = {
   archivedAt: string | null;
@@ -116,11 +119,6 @@ type MemberDetail = {
   primaryEmail: string;
   username: string;
 };
-
-function dateInputValue(value: string | null) {
-  if (!value) return "";
-  return value.slice(0, 10);
-}
 
 function Message({ value }: { value: string | null }) {
   if (!value) return null;
@@ -933,31 +931,31 @@ function MembershipsTab({
 function RolesTab({
   assignedRoles,
   canManageRoles,
+  highestManagedRank,
   memberId,
   roles,
 }: {
   assignedRoles: AssignedRole[];
   canManageRoles: boolean;
+  highestManagedRank: number | null;
   memberId: string;
   roles: RoleOption[];
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingRoleId, setPendingRoleId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const assignments = roles
-      .filter((role) => formData.get(`role-${role.id}`) === "on")
-      .map((role) => ({
-        roleId: role.id,
-        expiresAt: String(formData.get(`expiresAt-${role.id}`) ?? ""),
-      }));
-
+  function setRole(roleId: string, assigned: boolean) {
+    setMessage(null);
+    setPendingRoleId(roleId);
     startTransition(async () => {
-      const result = await updateMemberRolesAction(memberId, assignments);
+      const result = await setMemberRoleAssignmentAction(memberId, {
+        assigned,
+        roleId,
+      });
       setMessage(result.message ?? null);
+      setPendingRoleId(null);
       if (result.ok) router.refresh();
     });
   }
@@ -968,41 +966,52 @@ function RolesTab({
         <CardTitle className="font-bold">Roles</CardTitle>
       </CardHeader>
       <CardContent>
-        <form className="grid gap-3 p-4" onSubmit={submit}>
+        <div className="grid gap-3 p-4">
           {roles.map((role) => {
             const assigned = assignedRoles.find((row) => row.id === role.id);
+            const locked =
+              !canManageRoles ||
+              highestManagedRank === null ||
+              role.rank < highestManagedRank;
+            const pending = pendingRoleId === role.id;
             return (
               <div
-                className="grid gap-2 border p-3 sm:grid-cols-[minmax(0,1fr)_180px]"
+                className="grid gap-3 border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                 key={role.id}
               >
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Checkbox
-                    defaultChecked={Boolean(assigned)}
-                    disabled={!canManageRoles}
-                    name={`role-${role.id}`}
-                  />
-                  {role.name}
-                  <span className="text-xs text-muted-foreground">
-                    {role.key}
-                  </span>
-                </label>
-                <Input
-                  defaultValue={dateInputValue(assigned?.expiresAt ?? null)}
-                  disabled={!canManageRoles}
-                  name={`expiresAt-${role.id}`}
-                  type="date"
-                />
+                <div className="grid min-w-0 gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium">{role.name}</span>
+                    {assigned ? <Badge>Assigned</Badge> : null}
+                    {locked ? <Badge variant="outline">Locked</Badge> : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>{role.key}</span>
+                    <span>Priority {role.rank}</span>
+                    {locked ? (
+                      <span>
+                        {canManageRoles
+                          ? "Above your highest role"
+                          : "Role management unavailable"}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <Button
+                  disabled={locked || isPending || pending}
+                  onClick={() => setRole(role.id, !assigned)}
+                  size="xs"
+                  type="button"
+                  variant={assigned ? "outline" : "default"}
+                >
+                  {locked ? <LockIcon /> : null}
+                  {assigned ? "Remove" : "Grant"}
+                </Button>
               </div>
             );
           })}
-          <div className="flex items-center gap-2 border-t pt-4">
-            <Button disabled={!canManageRoles || isPending} type="submit">
-              Save roles
-            </Button>
-            <Message value={message} />
-          </div>
-        </form>
+          <Message value={message} />
+        </div>
       </CardContent>
     </Card>
   );
@@ -1128,6 +1137,7 @@ export function MemberDetailManagement({
   canManageRoles,
   canUpdate,
   contacts,
+  highestManagedRank,
   member,
   memberships,
   roles,
@@ -1140,6 +1150,7 @@ export function MemberDetailManagement({
   canManageRoles: boolean;
   canUpdate: boolean;
   contacts: ContactRow[];
+  highestManagedRank: number | null;
   member: MemberDetail;
   memberships: MembershipRow[];
   roles: RoleOption[];
@@ -1219,6 +1230,7 @@ export function MemberDetailManagement({
       <RolesTab
         assignedRoles={assignedRoles}
         canManageRoles={canManageRoles}
+        highestManagedRank={highestManagedRank}
         memberId={member.id}
         roles={roles}
       />

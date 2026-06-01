@@ -20,13 +20,11 @@ import {
   getCurrentUserHighestRoleRank,
   getHighestRoleRank,
   hasPermission,
+  memberHasActiveRole,
+  roleGrantsAnyPermission,
   sendMembershipWelcomeEmail,
   syncMemberApplicationRoles,
 } from "@/lib/members-action-dependencies";
-import {
-  memberHasActiveRole,
-  roleGrantsAnyPermission,
-} from "@/lib/members-query";
 import {
   addressInputSchema,
   contactInputSchema,
@@ -65,6 +63,10 @@ const searchKeycloakUsersSchema = z.object({
 
 const roleAssignmentsSchema = z.object({
   assignments: z.array(roleAssignmentSchema),
+});
+
+const roleAssignmentToggleSchema = roleAssignmentSchema.extend({
+  assigned: z.boolean(),
 });
 
 const deleteMemberSchema = z.object({
@@ -309,18 +311,6 @@ async function getKeycloakUserForMemberSync(member: {
     keycloakUser,
     resolvedKeycloakId: keycloakUser.id,
   };
-}
-
-function roleAssignmentsIncludeActiveRole(
-  assignments: RoleAssignmentInput[],
-  now = new Date(),
-) {
-  return assignments.some((assignment) => {
-    if (!assignment.expiresAt) return true;
-
-    const expiresAt = new Date(assignment.expiresAt);
-    return !Number.isNaN(expiresAt.getTime()) && expiresAt >= now;
-  });
 }
 
 async function syncKeycloakClientAccess(values: {
@@ -1161,9 +1151,10 @@ export async function updateMemberRolesAction(
   const roleIds = parsed.data.assignments.map(
     (assignment) => assignment.roleId,
   );
+  let existingRoles: Array<{ id: string; rank: number }> = [];
   if (roleIds.length) {
-    const existingRoles = await db
-      .select({ id: roles.id })
+    existingRoles = await db
+      .select({ id: roles.id, rank: roles.rank })
       .from(roles)
       .where(inArray(roles.id, roleIds));
     if (existingRoles.length !== roleIds.length) {
@@ -1172,6 +1163,21 @@ export async function updateMemberRolesAction(
   }
 
   const currentMemberId = await getCurrentMemberId();
+  const currentUserHighestRank = await getCurrentUserHighestRoleRank();
+  if (currentUserHighestRank === null) {
+    return {
+      ok: false,
+      message: "You cannot manage roles without an active role.",
+    };
+  }
+
+  if (existingRoles.some((role) => role.rank < currentUserHighestRank)) {
+    return {
+      ok: false,
+      message: "You cannot manage roles above your highest role.",
+    };
+  }
+
   if (currentMemberId === memberId) {
     const keepsCriticalAccess = await roleGrantsAnyPermission(
       roleIds,
@@ -1186,9 +1192,7 @@ export async function updateMemberRolesAction(
   }
 
   const now = new Date();
-  const hasActiveRole =
-    !member.disabledAt &&
-    roleAssignmentsIncludeActiveRole(parsed.data.assignments, now);
+  const hasActiveRole = !member.disabledAt && parsed.data.assignments.length > 0;
 
   try {
     await db.transaction(async (tx) => {
@@ -1196,9 +1200,6 @@ export async function updateMemberRolesAction(
       if (parsed.data.assignments.length) {
         await tx.insert(memberRoles).values(
           parsed.data.assignments.map((assignment) => ({
-            expiresAt: assignment.expiresAt
-              ? new Date(assignment.expiresAt)
-              : null,
             grantedAt: now,
             grantedBy: currentMemberId,
             memberId,
@@ -1234,4 +1235,121 @@ export async function updateMemberRolesAction(
     revalidateMembers(memberId);
   }
   return { ok: true, message: "Member roles updated successfully." };
+}
+
+export async function setMemberRoleAssignmentAction(
+  memberId: string,
+  values: z.infer<typeof roleAssignmentToggleSchema>,
+  options: { revalidate?: boolean } = {},
+): Promise<ActionResult> {
+  const access = await requireMembersPermission("members.role_management");
+  if (!access.ok) return access;
+
+  const parsed = roleAssignmentToggleSchema.safeParse(values);
+  if (!parsed.success) {
+    return { ok: false, message: "Please choose a valid role." };
+  }
+
+  const member = await getMemberIdentity(memberId);
+  if (!member) return { ok: false, message: "That member could not be found." };
+
+  const [role] = await db
+    .select({ id: roles.id, rank: roles.rank })
+    .from(roles)
+    .where(eq(roles.id, parsed.data.roleId));
+  if (!role) {
+    return { ok: false, message: "That role could not be found." };
+  }
+
+  const currentUserHighestRank = await getCurrentUserHighestRoleRank();
+  if (currentUserHighestRank === null) {
+    return {
+      ok: false,
+      message: "You cannot manage roles without an active role.",
+    };
+  }
+
+  if (role.rank < currentUserHighestRank) {
+    return {
+      ok: false,
+      message: "You cannot manage roles above your highest role.",
+    };
+  }
+
+  const currentMemberId = await getCurrentMemberId();
+  const currentRoleRows = await db
+    .select({ roleId: memberRoles.roleId })
+    .from(memberRoles)
+    .where(eq(memberRoles.memberId, memberId));
+  const currentRoleIds = currentRoleRows.map((row) => row.roleId);
+  const nextRoleIds = parsed.data.assigned
+    ? [...new Set([...currentRoleIds, parsed.data.roleId])]
+    : currentRoleIds.filter((roleId) => roleId !== parsed.data.roleId);
+
+  if (currentMemberId === memberId) {
+    const keepsCriticalAccess = await roleGrantsAnyPermission(
+      nextRoleIds,
+      CRITICAL_SELF_PERMISSIONS,
+    );
+    if (!keepsCriticalAccess) {
+      return {
+        ok: false,
+        message: "You cannot remove your own member management access.",
+      };
+    }
+  }
+
+  const now = new Date();
+  const hasActiveRole = !member.disabledAt && nextRoleIds.length > 0;
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(memberRoles)
+        .where(
+          and(
+            eq(memberRoles.memberId, memberId),
+            eq(memberRoles.roleId, parsed.data.roleId),
+          ),
+        );
+
+      if (parsed.data.assigned) {
+        await tx.insert(memberRoles).values({
+          grantedAt: now,
+          grantedBy: currentMemberId,
+          memberId,
+          roleId: parsed.data.roleId,
+        });
+      }
+
+      await syncKeycloakClientAccess({
+        disabled: Boolean(member.disabledAt),
+        hasActiveRole,
+        keycloakId: member.keycloakId,
+      });
+    });
+  } catch (error) {
+    logMembersSyncEvent(
+      "error",
+      "Keycloak access sync after role assignment update failed.",
+      {
+        keycloakId: member.keycloakId,
+        memberId,
+        ...getErrorLogDetails(error),
+      },
+    );
+    return {
+      ok: false,
+      message:
+        "Keycloak access could not be updated. Member roles were not changed.",
+    };
+  }
+
+  if (options.revalidate !== false) {
+    revalidateMembers(memberId);
+  }
+  return {
+    ok: true,
+    message: parsed.data.assigned ? "Role granted." : "Role removed.",
+  };
 }

@@ -284,7 +284,6 @@ export const memberRoles = pgTable(
     grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" })
       .defaultNow()
       .notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
   },
   (table) => [
     primaryKey({

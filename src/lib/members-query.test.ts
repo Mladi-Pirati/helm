@@ -40,27 +40,24 @@ describe("member query email selection", () => {
 });
 
 describe("member query inline assignments", () => {
-  test("keeps role expiry dates for active role badges", () => {
+  test("returns assigned role badges without expiry dates", () => {
     expect(
       getActiveRoleBadgesForMember(
         "member-1",
         [
           {
-            expiresAt: new Date("2026-06-10T00:00:00.000Z"),
             memberId: "member-1",
             roleId: "role-1",
             roleKey: "regional",
             roleName: "Regional",
           },
           {
-            expiresAt: null,
             memberId: "member-1",
             roleId: "role-2",
             roleKey: "trusted",
             roleName: "Trusted",
           },
           {
-            expiresAt: null,
             memberId: "member-2",
             roleId: "role-3",
             roleKey: "other",
@@ -70,13 +67,11 @@ describe("member query inline assignments", () => {
       ),
     ).toEqual([
       {
-        expiresAt: new Date("2026-06-10T00:00:00.000Z"),
         id: "role-1",
         key: "regional",
         name: "Regional",
       },
       {
-        expiresAt: null,
         id: "role-2",
         key: "trusted",
         name: "Trusted",
@@ -103,18 +98,15 @@ describe("member query inline assignments", () => {
 });
 
 describe("member query role filtering", () => {
-  test("encodes no-roles timestamp params for postgres", () => {
-    const where = buildMembersWhere(
-      {
-        page: 1,
-        pageSize: 50,
-        q: "",
-        roleId: [NO_ROLES_MEMBER_ROLE_FILTER],
-        sort: "name-asc",
-        status: "active",
-      },
-      new Date("2026-05-29T11:19:10.399Z"),
-    );
+  test("filters no-role members without role expiry checks", () => {
+    const where = buildMembersWhere({
+      page: 1,
+      pageSize: 50,
+      q: "",
+      roleId: [NO_ROLES_MEMBER_ROLE_FILTER],
+      sort: "name-asc",
+      status: "active",
+    });
 
     const query = db
       .select({ value: count() })
@@ -122,21 +114,19 @@ describe("member query role filtering", () => {
       .where(where)
       .toSQL();
 
-    expect(query.params).toEqual(["2026-05-29T11:19:10.399Z"]);
+    expect(query.sql).not.toContain("expires_at");
+    expect(query.params).toEqual([]);
   });
 
   test("filters by any selected active role", () => {
-    const where = buildMembersWhere(
-      {
-        page: 1,
-        pageSize: 50,
-        q: "",
-        roleId: ["role-1", "role-2"],
-        sort: "name-asc",
-        status: "active",
-      },
-      new Date("2026-05-29T11:19:10.399Z"),
-    );
+    const where = buildMembersWhere({
+      page: 1,
+      pageSize: 50,
+      q: "",
+      roleId: ["role-1", "role-2"],
+      sort: "name-asc",
+      status: "active",
+    });
 
     const query = db
       .select({ value: count() })
@@ -145,25 +135,19 @@ describe("member query role filtering", () => {
       .toSQL();
 
     expect(query.sql).toContain('"member_roles"."role_id" in ($1, $2)');
-    expect(query.params).toEqual([
-      "role-1",
-      "role-2",
-      "2026-05-29T11:19:10.399Z",
-    ]);
+    expect(query.sql).not.toContain("expires_at");
+    expect(query.params).toEqual(["role-1", "role-2"]);
   });
 
   test("combines selected roles and no-role filter with OR logic", () => {
-    const where = buildMembersWhere(
-      {
-        page: 1,
-        pageSize: 50,
-        q: "",
-        roleId: [NO_ROLES_MEMBER_ROLE_FILTER, "role-1"],
-        sort: "name-asc",
-        status: "all",
-      },
-      new Date("2026-05-29T11:19:10.399Z"),
-    );
+    const where = buildMembersWhere({
+      page: 1,
+      pageSize: 50,
+      q: "",
+      roleId: [NO_ROLES_MEMBER_ROLE_FILTER, "role-1"],
+      sort: "name-asc",
+      status: "all",
+    });
 
     const query = db
       .select({ value: count() })
@@ -172,13 +156,10 @@ describe("member query role filtering", () => {
       .toSQL();
 
     expect(query.sql).toContain("not exists");
-    expect(query.sql).toContain('"member_roles"."role_id" in ($2)');
+    expect(query.sql).toContain('"member_roles"."role_id" in ($1)');
     expect(query.sql).toContain(" or ");
-    expect(query.params).toEqual([
-      "2026-05-29T11:19:10.399Z",
-      "role-1",
-      "2026-05-29T11:19:10.399Z",
-    ]);
+    expect(query.sql).not.toContain("expires_at");
+    expect(query.params).toEqual(["role-1"]);
   });
 });
 

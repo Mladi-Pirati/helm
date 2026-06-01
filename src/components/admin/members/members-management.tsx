@@ -88,7 +88,6 @@ import {
 import { cn } from "@/lib/utils";
 
 export type MemberRoleBadge = {
-  expiresAt: string | null;
   id: string;
   key: string;
   name: string;
@@ -941,8 +940,6 @@ export function MembersManagement({
     const result = await updateMemberRolesAction(
       row.id,
       assignedRoleIds.map((nextRoleId) => ({
-        expiresAt:
-          row.roles.find((role) => role.id === nextRoleId)?.expiresAt ?? "",
         roleId: nextRoleId,
       })),
       { revalidate: false },

@@ -133,10 +133,6 @@ export default async function MembersPage({
               }
             : null,
           disabledAt: row.disabledAt?.toISOString() ?? null,
-          roles: row.roles.map((role) => ({
-            ...role,
-            expiresAt: role.expiresAt?.toISOString() ?? null,
-          })),
           updatedAt: row.updatedAt.toISOString(),
         }))}
         roleOptions={roleOptions}

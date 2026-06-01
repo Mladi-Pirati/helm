@@ -5,7 +5,6 @@ import {
   desc,
   eq,
   exists,
-  gte,
   inArray,
   isNotNull,
   isNull,
@@ -33,7 +32,6 @@ import {
 } from "@/lib/members";
 
 type ActiveRoleRow = {
-  expiresAt: Date | null;
   memberId: string;
   roleId: string;
   roleKey: string;
@@ -46,10 +44,7 @@ type MemberApplicationAccessRow = {
   memberId: string;
 };
 
-export function buildMembersWhere(
-  filters: MembersListFilters,
-  now = new Date(),
-) {
+export function buildMembersWhere(filters: MembersListFilters) {
   const whereClauses = [];
 
   if (filters.status === "active") {
@@ -91,13 +86,7 @@ export function buildMembersWhere(
             .select({ value: sql`1` })
             .from(memberRoles)
             .where(
-              and(
-                eq(memberRoles.memberId, members.id),
-                or(
-                  isNull(memberRoles.expiresAt),
-                  gte(memberRoles.expiresAt, now),
-                ),
-              ),
+              eq(memberRoles.memberId, members.id),
             ),
         ),
       );
@@ -113,10 +102,6 @@ export function buildMembersWhere(
               and(
                 eq(memberRoles.memberId, members.id),
                 inArray(memberRoles.roleId, roleIds),
-                or(
-                  isNull(memberRoles.expiresAt),
-                  gte(memberRoles.expiresAt, now),
-                ),
               ),
             ),
         ),
@@ -147,7 +132,7 @@ export function buildMembersOrderBy(sort: MemberListSort) {
 
 export async function getMembersPage(filters: MembersListFilters) {
   const now = new Date();
-  const where = buildMembersWhere(filters, now);
+  const where = buildMembersWhere(filters);
   const offset = (filters.page - 1) * filters.pageSize;
 
   const countQuery = db.select({ value: count() }).from(members);
@@ -194,7 +179,6 @@ export async function getMembersPage(filters: MembersListFilters) {
     ? await db
         .select({
           memberId: memberRoles.memberId,
-          expiresAt: memberRoles.expiresAt,
           roleId: roles.id,
           roleKey: roles.key,
           roleName: roles.name,
@@ -202,10 +186,7 @@ export async function getMembersPage(filters: MembersListFilters) {
         .from(memberRoles)
         .innerJoin(roles, eq(memberRoles.roleId, roles.id))
         .where(
-          and(
-            inArray(memberRoles.memberId, memberIds),
-            or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-          ),
+          inArray(memberRoles.memberId, memberIds),
         )
         .orderBy(asc(roles.rank))
     : [];
@@ -279,7 +260,6 @@ export function getActiveRoleBadgesForMember(
   return roleRows
     .filter((role) => role.memberId === memberId)
     .map((role) => ({
-      expiresAt: role.expiresAt,
       id: role.roleId,
       key: role.roleKey,
       name: role.roleName,
@@ -339,16 +319,11 @@ export async function roleGrantsAnyPermission(
   return rows.length > 0;
 }
 
-export async function memberHasActiveRole(memberId: string, now = new Date()) {
+export async function memberHasActiveRole(memberId: string) {
   const rows = await db
     .select({ id: memberRoles.roleId })
     .from(memberRoles)
-    .where(
-      and(
-        eq(memberRoles.memberId, memberId),
-        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-      ),
-    )
+    .where(eq(memberRoles.memberId, memberId))
     .limit(1);
 
   return rows.length > 0;

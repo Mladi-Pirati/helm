@@ -14,6 +14,7 @@ import {
   roles,
 } from "@/db/schema";
 import {
+  getCurrentUserHighestRoleRank,
   getCurrentUserPermissions,
   requirePermission,
 } from "@/lib/auth/permissions";
@@ -29,6 +30,9 @@ export default async function MemberDetailPage({
   const canDelete = permissions.includes("members.delete");
   const canUpdate = permissions.includes("members.update");
   const canManageRoles = permissions.includes("members.role_management");
+  const highestManagedRank = canManageRoles
+    ? await getCurrentUserHighestRoleRank()
+    : null;
 
   const member = await db.query.members.findFirst({
     where: eq(members.id, memberId),
@@ -84,15 +88,16 @@ export default async function MemberDetailPage({
         id: roles.id,
         key: roles.key,
         name: roles.name,
+        rank: roles.rank,
       })
       .from(roles)
       .orderBy(asc(roles.rank)),
     db
       .select({
-        expiresAt: memberRoles.expiresAt,
         id: roles.id,
         key: roles.key,
         name: roles.name,
+        rank: roles.rank,
       })
       .from(memberRoles)
       .innerJoin(roles, eq(memberRoles.roleId, roles.id))
@@ -128,10 +133,7 @@ export default async function MemberDetailPage({
   return (
     <MemberDetailManagement
       addresses={addressRows}
-      assignedRoles={assignedRoleRows.map((role) => ({
-        ...role,
-        expiresAt: role.expiresAt?.toISOString() ?? null,
-      }))}
+      assignedRoles={assignedRoleRows}
       applications={applicationRows.map((application) => ({
         ...application,
         archivedAt: application.archivedAt?.toISOString() ?? null,
@@ -141,6 +143,7 @@ export default async function MemberDetailPage({
         grantedAt: application.grantedAt.toISOString(),
       }))}
       canManageRoles={canManageRoles}
+      highestManagedRank={highestManagedRank}
       canDelete={canDelete}
       canUpdate={canUpdate}
       contacts={contactRows}

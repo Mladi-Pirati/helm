@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { eq, and, isNull, gte, min, or } from "drizzle-orm";
+import { eq, min } from "drizzle-orm";
 import { forbidden } from "next/navigation";
 
 import { db } from "@/db";
@@ -21,11 +21,8 @@ export async function getHighestRoleRank(): Promise<number | null> {
 
 /**
  * Get all permission keys for a given member ID.
- * Respects role expiration (granted_at <= now <= expires_at).
  */
 async function getMemberPermissionKeys(memberId: string): Promise<Set<string>> {
-  const now = new Date();
-
   const results = await db
     .select({
       permissionKey: permissions.key,
@@ -33,13 +30,7 @@ async function getMemberPermissionKeys(memberId: string): Promise<Set<string>> {
     .from(memberRoles)
     .innerJoin(rolePermissions, eq(memberRoles.roleId, rolePermissions.roleId))
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-    .where(
-      and(
-        eq(memberRoles.memberId, memberId),
-        // Not expired: expires_at IS NULL OR expires_at >= now
-        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-      ),
-    );
+    .where(eq(memberRoles.memberId, memberId));
 
   return new Set(results.map((r) => r.permissionKey));
 }
@@ -125,17 +116,11 @@ export async function getCurrentUserHighestRoleRank(): Promise<number | null> {
     return null;
   }
 
-  const now = new Date();
   const roleRanks = await db
     .select({ rank: roles.rank })
     .from(memberRoles)
     .innerJoin(roles, eq(memberRoles.roleId, roles.id))
-    .where(
-      and(
-        eq(memberRoles.memberId, member.id),
-        or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-      ),
-    );
+    .where(eq(memberRoles.memberId, member.id));
 
   if (!roleRanks.length) {
     return null;
@@ -201,20 +186,13 @@ export async function getCurrentUserPermissions(): Promise<{
     return { permissions: [], roles: [] };
   }
 
-  const now = new Date();
-
   const [permResults, roleResults] = await Promise.all([
     db
       .select({ key: permissions.key })
       .from(memberRoles)
       .innerJoin(rolePermissions, eq(memberRoles.roleId, rolePermissions.roleId))
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(
-        and(
-          eq(memberRoles.memberId, member.id),
-          or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-        ),
-      ),
+      .where(eq(memberRoles.memberId, member.id)),
     db
       .select({
         id: roles.id,
@@ -223,12 +201,7 @@ export async function getCurrentUserPermissions(): Promise<{
       })
       .from(memberRoles)
       .innerJoin(roles, eq(memberRoles.roleId, roles.id))
-      .where(
-        and(
-          eq(memberRoles.memberId, member.id),
-          or(isNull(memberRoles.expiresAt), gte(memberRoles.expiresAt, now)),
-        ),
-      ),
+      .where(eq(memberRoles.memberId, member.id)),
   ]);
 
   return {

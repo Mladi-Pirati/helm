@@ -72,6 +72,16 @@ let createdContacts: Array<{
   type: string;
   value: string;
 }> = [];
+let roleRows: Array<{ id: string; rank: number }> = [];
+let memberRoleRows: Array<{ memberId: string; roleId: string }> = [];
+let insertedMemberRoles: Array<{
+  expiresAt?: Date | null;
+  grantedAt: Date;
+  grantedBy: string | null;
+  memberId: string;
+  roleId: string;
+}> = [];
+let criticalRoleIds = new Set<string>();
 let bulkResendRows: Array<{
   email: string | null;
   firstName: string;
@@ -123,6 +133,10 @@ function createMembersKeycloakAdminClient() {
       if (!user) throw new Error("Keycloak user not found");
       return user;
     },
+    async ensureDefaultClientRole(userId: string) {
+      void userId;
+      return;
+    },
     async removeAllClientRoles(userId: string) {
       removeAllClientRolesCalls.push(userId);
     },
@@ -130,9 +144,12 @@ function createMembersKeycloakAdminClient() {
 }
 
 async function hasPermission(permissionKey: string) {
-  expect(["members.create", "members.delete", "members.update"]).toContain(
-    permissionKey,
-  );
+  expect([
+    "members.create",
+    "members.delete",
+    "members.role_management",
+    "members.update",
+  ]).toContain(permissionKey);
   return allowed;
 }
 
@@ -168,6 +185,18 @@ async function syncMemberApplicationRoles(values: {
   syncMemberApplicationRolesCalls.push(values);
 }
 
+async function memberHasActiveRole(memberId: string) {
+  return memberRoleRows.some((row) => row.memberId === memberId);
+}
+
+async function roleGrantsAnyPermission(
+  roleIds: string[],
+  permissionKeys: string[],
+) {
+  void permissionKeys;
+  return roleIds.some((roleId) => criticalRoleIds.has(roleId));
+}
+
 function revalidatePath(path: string) {
   revalidatedPaths.push(path);
 }
@@ -196,7 +225,7 @@ type MockDb = {
       >;
     };
   };
-  select(): {
+  select(selection?: Record<string, unknown>): {
     from(table?: unknown): {
       leftJoin(): {
         where(): {
@@ -204,6 +233,7 @@ type MockDb = {
         };
       };
       where(condition?: unknown):
+        | Promise<Array<{ id: string; rank: number }>>
         | Promise<Array<{ value: null }>>
         | {
             orderBy(): Promise<typeof bulkResendRows>;
@@ -247,11 +277,26 @@ const db: MockDb = {
     return {
       values(values: unknown) {
         if (Array.isArray(values)) {
-          createdContacts.push(
-            ...values.map((value) => ({
-              ...(value as (typeof createdContacts)[number]),
-            })),
-          );
+          if (
+            values.some(
+              (value) =>
+                typeof value === "object" &&
+                value !== null &&
+                "roleId" in value,
+            )
+          ) {
+            insertedMemberRoles.push(
+              ...values.map((value) => ({
+                ...(value as (typeof insertedMemberRoles)[number]),
+              })),
+            );
+          } else {
+            createdContacts.push(
+              ...values.map((value) => ({
+                ...(value as (typeof createdContacts)[number]),
+              })),
+            );
+          }
           return;
         }
 
@@ -268,6 +313,13 @@ const db: MockDb = {
           return;
         }
 
+        if ("memberId" in insertValue && "roleId" in insertValue) {
+          insertedMemberRoles.push({
+            ...(insertValue as (typeof insertedMemberRoles)[number]),
+          });
+          return;
+        }
+
         createdMembers.push({
           ...(values as (typeof createdMembers)[number]),
         });
@@ -280,7 +332,7 @@ const db: MockDb = {
       },
     };
   },
-  select() {
+  select(selection?: Record<string, unknown>) {
     return {
       from() {
         return {
@@ -296,12 +348,20 @@ const db: MockDb = {
             };
           },
           where() {
+            if (selection && "roleId" in selection) {
+              return Promise.resolve(memberRoleRows);
+            }
+
             if (bulkResendRows.length) {
               return {
                 async orderBy() {
                   return bulkResendRows;
                 },
               };
+            }
+
+            if (roleRows.length) {
+              return Promise.resolve(roleRows);
             }
 
             return Promise.resolve([{ value: null }]);
@@ -331,6 +391,8 @@ mock.module("@/lib/members-action-dependencies", () => ({
   getCurrentUserHighestRoleRank,
   getHighestRoleRank,
   hasPermission,
+  memberHasActiveRole,
+  roleGrantsAnyPermission,
   sendMembershipWelcomeEmail,
   syncMemberApplicationRoles,
 }));
@@ -376,6 +438,10 @@ beforeEach(() => {
   createdKeycloakUsers = [];
   createdMembers = [];
   createdContacts = [];
+  roleRows = [];
+  memberRoleRows = [];
+  insertedMemberRoles = [];
+  criticalRoleIds = new Set<string>();
   bulkResendRows = [];
   sentWelcomeEmails = [];
   failingWelcomeEmailAddresses = new Set<string>();
@@ -620,6 +686,82 @@ describe("deleteMemberAction", () => {
       },
     ]);
     expect(deletedMemberIds).toHaveLength(1);
+  });
+});
+
+describe("setMemberRoleAssignmentAction", () => {
+  test("rejects users without member role-management permission", async () => {
+    allowed = false;
+    const { setMemberRoleAssignmentAction } = await membersActionsPromise;
+
+    await expect(
+      setMemberRoleAssignmentAction("target-member", {
+        assigned: true,
+        roleId: "role-admin",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "You are not allowed to manage members.",
+    });
+    expect(insertedMemberRoles).toEqual([]);
+  });
+
+  test("rejects assigning roles above the current user's highest role", async () => {
+    currentUserHighestRoleRank = 2;
+    roleRows = [{ id: "role-super-admin", rank: 1 }];
+    const { setMemberRoleAssignmentAction } = await membersActionsPromise;
+
+    await expect(
+      setMemberRoleAssignmentAction("target-member", {
+        assigned: true,
+        roleId: "role-super-admin",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "You cannot manage roles above your highest role.",
+    });
+    expect(insertedMemberRoles).toEqual([]);
+  });
+
+  test("assigns equal-ranked roles without storing an expiry date", async () => {
+    currentUserHighestRoleRank = 2;
+    roleRows = [{ id: "role-admin", rank: 2 }];
+    const { setMemberRoleAssignmentAction } = await membersActionsPromise;
+
+    await expect(
+      setMemberRoleAssignmentAction("target-member", {
+        assigned: true,
+        roleId: "role-admin",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      message: "Role granted.",
+    });
+    expect(insertedMemberRoles).toHaveLength(1);
+    expect(insertedMemberRoles[0]).toMatchObject({
+      grantedBy: "current-member",
+      memberId: "target-member",
+      roleId: "role-admin",
+    });
+    expect(insertedMemberRoles[0]).not.toHaveProperty("expiresAt");
+  });
+
+  test("preserves self critical-access protection when removing a role", async () => {
+    currentMemberId = "target-member";
+    currentUserHighestRoleRank = 2;
+    roleRows = [{ id: "role-admin", rank: 2 }];
+    memberRoleRows = [{ memberId: "target-member", roleId: "role-admin" }];
+    const { setMemberRoleAssignmentAction } = await membersActionsPromise;
+
+    await expect(
+      setMemberRoleAssignmentAction("target-member", {
+        assigned: false,
+        roleId: "role-admin",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      message: "You cannot remove your own member management access.",
+    });
   });
 });
 

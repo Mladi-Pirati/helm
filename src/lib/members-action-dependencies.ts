@@ -8,6 +8,10 @@ import {
 import { getCurrentUser } from "@/lib/auth/session";
 import { sendMembershipWelcomeEmail } from "@/lib/email/membership-approval";
 import { createMembersKeycloakAdminClient } from "@/lib/members-keycloak";
+import {
+  memberHasActiveRole,
+  roleGrantsAnyPermission,
+} from "@/lib/members-query";
 
 export {
   createMembersKeycloakAdminClient,
@@ -16,6 +20,8 @@ export {
   getCurrentUserHighestRoleRank,
   getHighestRoleRank,
   hasPermission,
+  memberHasActiveRole,
+  roleGrantsAnyPermission,
   sendMembershipWelcomeEmail,
   syncMemberApplicationRoles,
 };
