@@ -19,6 +19,22 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   );
 }
 
+function TableScrollContainer({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="table-scroll-container"
+      className={cn(
+        "relative w-full max-h-[calc(100dvh-24rem)] overflow-auto",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
@@ -106,6 +122,7 @@ function TableCaption({
 
 export {
   Table,
+  TableScrollContainer,
   TableHeader,
   TableBody,
   TableFooter,

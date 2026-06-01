@@ -15,6 +15,10 @@ describe("membership applications management table implementation", () => {
     expect(source).toContain("@tanstack/react-virtual");
     expect(source).toContain("useVirtualizer");
     expect(source).toContain("getVirtualItems");
+    expect(source).toContain("TableScrollContainer");
+    expect(source).toContain(
+      "getScrollElement: () => scrollContainerRef.current",
+    );
   });
 
   test("renders pagination controls without header filters", () => {
@@ -39,6 +43,9 @@ describe("membership applications management table implementation", () => {
     );
 
     expect(source).toContain("colSpan={columns.length}");
+    expect(source).toContain(
+      '<TableScrollContainer\n          className="max-h-[calc(100dvh-28rem)]"\n          ref={scrollContainerRef}\n        >',
+    );
     expect(source).toContain("No applications match the current filters.");
     expect(source).not.toContain(
       '<CardContent className="px-0">\n        {table.getRowModel().rows.length ? (',

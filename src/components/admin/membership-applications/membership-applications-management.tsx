@@ -14,12 +14,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -27,6 +22,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableScrollContainer,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkMembershipApplicationActionDialog } from "@/components/admin/membership-applications/bulk-membership-application-action-dialog";
@@ -345,11 +341,14 @@ export function MembershipApplicationsManagement({
             ) : null}
           </div>
         </div>
-        <div
-          className="max-h-[70vh] overflow-auto"
+        <TableScrollContainer
+          className="max-h-[calc(100dvh-28rem)]"
           ref={scrollContainerRef}
         >
-          <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
+          <Table
+            className="table-fixed"
+            style={{ width: table.getTotalSize() }}
+          >
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
@@ -418,7 +417,7 @@ export function MembershipApplicationsManagement({
               )}
             </TableBody>
           </Table>
-        </div>
+        </TableScrollContainer>
         {tableRows.length ? (
           <div className="flex flex-col gap-3 border-t p-4 text-xs md:flex-row md:items-center md:justify-between">
             <span className="text-muted-foreground">

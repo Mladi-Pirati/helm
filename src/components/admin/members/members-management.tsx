@@ -28,12 +28,7 @@ import {
 } from "@/actions/members";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
@@ -76,6 +71,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableScrollContainer,
 } from "@/components/ui/table";
 import { formatSlovenianDateTime } from "@/lib/date-format";
 import {
@@ -215,8 +211,9 @@ function AddMemberSheet() {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [selectedUser, setSelectedUser] =
-    useState<KeycloakUserOption | null>(null);
+  const [selectedUser, setSelectedUser] = useState<KeycloakUserOption | null>(
+    null,
+  );
   const [memberForm, setMemberForm] = useState({
     firstName: "",
     lastName: "",
@@ -495,11 +492,7 @@ function AddMemberSheet() {
             aria-invalid={Boolean(fieldErrors.primaryEmail)}
             disabled={Boolean(selectedUser?.email)}
             onChange={(event) =>
-              setMemberField(
-                "primaryEmail",
-                event.target.value,
-                "primaryEmail",
-              )
+              setMemberField("primaryEmail", event.target.value, "primaryEmail")
             }
             value={memberForm.primaryEmail}
             name="primaryEmail"
@@ -514,9 +507,7 @@ function AddMemberSheet() {
           ) : null}
           <Input
             name="notes"
-            onChange={(event) =>
-              setMemberField("notes", event.target.value)
-            }
+            onChange={(event) => setMemberField("notes", event.target.value)}
             placeholder="Notes"
             value={memberForm.notes}
           />
@@ -548,11 +539,7 @@ function AddMemberSheet() {
   );
 }
 
-function StatusFilterDialog({
-  filters,
-}: {
-  filters: MembersListFilters;
-}) {
+function StatusFilterDialog({ filters }: { filters: MembersListFilters }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState(() =>
@@ -1154,58 +1141,66 @@ export function MembersManagement({
         </div>
       </CardHeader>
       <CardContent className="px-0">
-        <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} style={{ width: header.getSize() }}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      className={
-                        cell.column.id === "roles" ||
-                        cell.column.id === "applications"
-                          ? "whitespace-normal"
-                          : undefined
-                      }
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
+        <TableScrollContainer>
+          <Table
+            className="table-fixed"
+            style={{ width: table.getTotalSize() }}
+          >
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      style={{ width: header.getSize() }}
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  className="h-48 text-center text-muted-foreground"
-                  colSpan={columns.length}
-                >
-                  No members match the current filters.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        className={
+                          cell.column.id === "roles" ||
+                          cell.column.id === "applications"
+                            ? "whitespace-normal"
+                            : undefined
+                        }
+                        key={cell.id}
+                        style={{ width: cell.column.getSize() }}
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext(),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    className="h-48 text-center text-muted-foreground"
+                    colSpan={columns.length}
+                  >
+                    No members match the current filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableScrollContainer>
         {table.getRowModel().rows.length ? (
           <div className="flex flex-col gap-3 border-t p-4 text-xs md:flex-row md:items-center md:justify-between">
             <span className="text-muted-foreground">

@@ -14,6 +14,7 @@ describe("members management table implementation", () => {
     expect(source).toContain("type ColumnDef");
     expect(source).toContain("TableHeader");
     expect(source).toContain("TableBody");
+    expect(source).toContain("TableScrollContainer");
     expect(source).not.toContain("@tanstack/react-virtual");
     expect(source).not.toContain("useVirtualizer");
   });
@@ -104,6 +105,7 @@ describe("members management table implementation", () => {
     );
 
     expect(source).toContain("colSpan={columns.length}");
+    expect(source).toContain("<TableScrollContainer>");
     expect(source).toContain("No members match the current filters.");
     expect(source).not.toContain(
       '<CardContent className="px-0">\n        {table.getRowModel().rows.length ? (',
@@ -117,10 +119,10 @@ describe("members management table implementation", () => {
     );
 
     expect(source).toContain("function clearSelectedUser()");
-    expect(source).toContain("firstName: \"\"");
-    expect(source).toContain("lastName: \"\"");
-    expect(source).toContain("primaryEmail: \"\"");
-    expect(source).toContain("username: \"\"");
+    expect(source).toContain('firstName: ""');
+    expect(source).toContain('lastName: ""');
+    expect(source).toContain('primaryEmail: ""');
+    expect(source).toContain('username: ""');
     expect(source).toContain("disabled={Boolean(selectedUser)}");
     expect(source).toContain("disabled={Boolean(selectedUser?.email)}");
   });
@@ -130,5 +132,14 @@ describe("members management table implementation", () => {
 
     expect(source).toContain("font-extrabold");
     expect(source).not.toContain("font-medium whitespace-nowrap");
+  });
+
+  test("shared table scroll container uses a viewport-relative max height", () => {
+    const source = readFileSync("src/components/ui/table.tsx", "utf8");
+
+    expect(source).toContain("function TableScrollContainer");
+    expect(source).toContain("max-h-[calc(100dvh-24rem)]");
+    expect(source).toContain("overflow-auto");
+    expect(source).toContain("TableScrollContainer,");
   });
 });
