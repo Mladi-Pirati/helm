@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { asc, count, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 
 import { MembersManagement } from "@/components/admin/members/members-management";
@@ -6,11 +6,13 @@ import { MembersFilterForm } from "@/components/admin/members/members-filter-for
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
-import { mladiPiratiMembershipApplications, roles } from "@/db/schema";
+import {
+  accessApplications,
+  mladiPiratiMembershipApplications,
+  roles,
+} from "@/db/schema";
 import {
   getCurrentUserPermissions,
-  getCurrentUserHighestRoleRank,
-  getHighestRoleRank,
   requirePermission,
 } from "@/lib/auth/permissions";
 import { formatPendingMembershipApplicationCount } from "@/lib/membership-applications";
@@ -27,28 +29,35 @@ export default async function MembersPage({
   searchParams: Promise<MembersSearchParams>;
 }) {
   await requirePermission("members.read");
-  const [{ permissions }, currentUserHighestRoleRank, highestRoleRank] =
-    await Promise.all([
-      getCurrentUserPermissions(),
-      getCurrentUserHighestRoleRank(),
-      getHighestRoleRank(),
-    ]);
+  const { permissions } = await getCurrentUserPermissions();
   const filters = parseMembersFilters(await searchParams);
-  const [{ rows, pageCount, totalCount }, roleOptions, pendingApplications] =
-    await Promise.all([
-      getMembersPage(filters),
-      db
-        .select({
-          id: roles.id,
-          name: roles.name,
-        })
-        .from(roles)
-        .orderBy(roles.rank),
-      db
-        .select({ value: count() })
-        .from(mladiPiratiMembershipApplications)
-        .where(eq(mladiPiratiMembershipApplications.status, "pending")),
-    ]);
+  const [
+    { rows, pageCount, totalCount },
+    roleOptions,
+    applicationOptions,
+    pendingApplications,
+  ] = await Promise.all([
+    getMembersPage(filters),
+    db
+      .select({
+        id: roles.id,
+        name: roles.name,
+      })
+      .from(roles)
+      .orderBy(roles.rank),
+    db
+      .select({
+        id: accessApplications.id,
+        name: accessApplications.name,
+      })
+      .from(accessApplications)
+      .where(isNull(accessApplications.archivedAt))
+      .orderBy(asc(accessApplications.name)),
+    db
+      .select({ value: count() })
+      .from(mladiPiratiMembershipApplications)
+      .where(eq(mladiPiratiMembershipApplications.status, "pending")),
+  ]);
   const pendingApplicationsCount = pendingApplications[0]?.value ?? 0;
   const filtersKey = [
     filters.q,
@@ -88,18 +97,12 @@ export default async function MembersPage({
         </div>
       </div>
 
-      <MembersFilterForm
-        filters={filters}
-        key={filtersKey}
-      />
+      <MembersFilterForm filters={filters} key={filtersKey} />
 
       <MembersManagement
+        applicationOptions={applicationOptions}
         canCreate={permissions.includes("members.create")}
-        canResendWelcomeEmail={
-          permissions.includes("members.update") &&
-          currentUserHighestRoleRank !== null &&
-          currentUserHighestRoleRank === highestRoleRank
-        }
+        canManageRoles={permissions.includes("members.role_management")}
         filters={filters}
         nextPageHref={buildMembersListHref({
           ...filters,
@@ -130,6 +133,10 @@ export default async function MembersPage({
               }
             : null,
           disabledAt: row.disabledAt?.toISOString() ?? null,
+          roles: row.roles.map((role) => ({
+            ...role,
+            expiresAt: role.expiresAt?.toISOString() ?? null,
+          })),
           updatedAt: row.updatedAt.toISOString(),
         }))}
         roleOptions={roleOptions}

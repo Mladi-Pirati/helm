@@ -16,7 +16,9 @@ import {
 
 import { db } from "@/db";
 import {
+  accessApplications,
   contacts,
+  memberApplicationAccess,
   memberRoles,
   members,
   memberships,
@@ -29,6 +31,20 @@ import {
   NO_ROLES_MEMBER_ROLE_FILTER,
   type MemberListSort,
 } from "@/lib/members";
+
+type ActiveRoleRow = {
+  expiresAt: Date | null;
+  memberId: string;
+  roleId: string;
+  roleKey: string;
+  roleName: string;
+};
+
+type MemberApplicationAccessRow = {
+  applicationId: string;
+  applicationName: string;
+  memberId: string;
+};
 
 export function buildMembersWhere(
   filters: MembersListFilters,
@@ -178,6 +194,7 @@ export async function getMembersPage(filters: MembersListFilters) {
     ? await db
         .select({
           memberId: memberRoles.memberId,
+          expiresAt: memberRoles.expiresAt,
           roleId: roles.id,
           roleKey: roles.key,
           roleName: roles.name,
@@ -191,6 +208,26 @@ export async function getMembersPage(filters: MembersListFilters) {
           ),
         )
         .orderBy(asc(roles.rank))
+    : [];
+  const applicationAccessRows = memberIds.length
+    ? await db
+        .select({
+          applicationId: accessApplications.id,
+          applicationName: accessApplications.name,
+          memberId: memberApplicationAccess.memberId,
+        })
+        .from(memberApplicationAccess)
+        .innerJoin(
+          accessApplications,
+          eq(memberApplicationAccess.applicationId, accessApplications.id),
+        )
+        .where(
+          and(
+            inArray(memberApplicationAccess.memberId, memberIds),
+            isNull(accessApplications.archivedAt),
+          ),
+        )
+        .orderBy(asc(accessApplications.name))
     : [];
   const membershipRows = memberIds.length
     ? await db
@@ -225,16 +262,40 @@ export async function getMembersPage(filters: MembersListFilters) {
             }
           : null;
       })(),
-      roles: roleRows
-        .filter((role) => role.memberId === row.id)
-        .map((role) => ({
-          id: role.roleId,
-          key: role.roleKey,
-          name: role.roleName,
-        })),
+      applications: getAssignedApplicationsForMember(
+        row.id,
+        applicationAccessRows,
+      ),
+      roles: getActiveRoleBadgesForMember(row.id, roleRows),
     })),
     totalCount: Number(totalCount),
   };
+}
+
+export function getActiveRoleBadgesForMember(
+  memberId: string,
+  roleRows: ActiveRoleRow[],
+) {
+  return roleRows
+    .filter((role) => role.memberId === memberId)
+    .map((role) => ({
+      expiresAt: role.expiresAt,
+      id: role.roleId,
+      key: role.roleKey,
+      name: role.roleName,
+    }));
+}
+
+export function getAssignedApplicationsForMember(
+  memberId: string,
+  applicationAccessRows: MemberApplicationAccessRow[],
+) {
+  return applicationAccessRows
+    .filter((application) => application.memberId === memberId)
+    .map((application) => ({
+      id: application.applicationId,
+      name: application.applicationName,
+    }));
 }
 
 export function getPrimaryEmailForMember(

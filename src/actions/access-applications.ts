@@ -359,6 +359,7 @@ export async function setAccessApplicationArchivedAction(
 export async function setMemberApplicationAccessAction(
   memberId: string,
   values: ApplicationAccessAssignmentInput,
+  options: { revalidate?: boolean } = {},
 ): Promise<ActionResult> {
   const access = await requireMemberRoleManagementPermission();
   if (!access.ok) return access;
@@ -433,8 +434,10 @@ export async function setMemberApplicationAccessAction(
     };
   }
 
-  revalidatePath(`/admin/members/${memberId}`);
-  revalidatePath("/admin/members");
+  if (options.revalidate !== false) {
+    revalidatePath(`/admin/members/${memberId}`);
+    revalidatePath("/admin/members");
+  }
   return {
     ok: true,
     message: parsed.data.assigned

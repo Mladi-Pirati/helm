@@ -16,26 +16,16 @@ import {
   CheckIcon,
   ChevronsUpDownIcon,
   FilterIcon,
-  MailIcon,
   PlusIcon,
   XIcon,
 } from "lucide-react";
 
+import { setMemberApplicationAccessAction } from "@/actions/access-applications";
 import {
   createMemberAction,
-  resendWelcomeEmailAction,
   searchKeycloakUsersAction,
+  updateMemberRolesAction,
 } from "@/actions/members";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,6 +35,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogClose,
@@ -90,12 +88,19 @@ import {
 import { cn } from "@/lib/utils";
 
 export type MemberRoleBadge = {
+  expiresAt: string | null;
   id: string;
   key: string;
   name: string;
 };
 
+export type MemberApplicationBadge = {
+  id: string;
+  name: string;
+};
+
 export type MemberListRow = {
+  applications: MemberApplicationBadge[];
   currentMembership: {
     expiresAt: string | null;
     extendedAt: string;
@@ -127,6 +132,16 @@ type PageSizeOption = {
 };
 
 type RoleOption = {
+  id: string;
+  name: string;
+};
+
+type ApplicationOption = {
+  id: string;
+  name: string;
+};
+
+type AssignmentOption = {
   id: string;
   name: string;
 };
@@ -726,86 +741,172 @@ function RolesFilterDialog({
   );
 }
 
-function getMemberDisplayName(row: MemberListRow) {
-  return `${row.firstName} ${row.lastName}`.trim() || row.username;
-}
-
-function ResendWelcomeEmailDialog({ row }: { row: MemberListRow }) {
-  const router = useRouter();
+function InlineAssignmentPopover({
+  assignedIds,
+  disabled,
+  emptyAssignedLabel,
+  emptyLabel,
+  label,
+  onAssignmentsChanged,
+  onToggle,
+  options,
+}: {
+  assignedIds: Set<string>;
+  disabled?: boolean;
+  emptyAssignedLabel: string;
+  emptyLabel: string;
+  label: string;
+  onAssignmentsChanged?: () => void;
+  onToggle: (
+    optionId: string,
+    assigned: boolean,
+    assignedIds: string[],
+  ) => Promise<string | null>;
+  options: AssignmentOption[];
+}) {
   const [open, setOpen] = useState(false);
+  const [optimisticAssignedIds, setOptimisticAssignedIds] = useState(
+    () => new Set(assignedIds),
+  );
   const [serverMessage, setServerMessage] = useState<string | null>(null);
+  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
+  const [hasSuccessfulChange, setHasSuccessfulChange] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const memberName = getMemberDisplayName(row);
+  const optimisticAssignedOptions = options.filter((option) =>
+    optimisticAssignedIds.has(option.id),
+  );
 
   function handleOpenChange(nextOpen: boolean) {
     setOpen(nextOpen);
-    if (!nextOpen) setServerMessage(null);
+    if (nextOpen) {
+      setOptimisticAssignedIds(new Set(assignedIds));
+      setHasSuccessfulChange(false);
+    } else {
+      setServerMessage(null);
+      if (hasSuccessfulChange) onAssignmentsChanged?.();
+    }
   }
 
-  function handleConfirm() {
+  function setOptimisticAssignment(optionId: string, assigned: boolean) {
+    setOptimisticAssignedIds((current) => {
+      const nextAssignedIds = new Set(current);
+      if (assigned) {
+        nextAssignedIds.add(optionId);
+      } else {
+        nextAssignedIds.delete(optionId);
+      }
+      return nextAssignedIds;
+    });
+  }
+
+  function revertOptimisticAssignment(optionId: string, assigned: boolean) {
+    setOptimisticAssignment(optionId, !assigned);
+  }
+
+  function handleToggle(optionId: string, assigned: boolean) {
     setServerMessage(null);
+    setPendingOptionId(optionId);
+    const nextAssignedIds = new Set(optimisticAssignedIds);
+    if (assigned) {
+      nextAssignedIds.add(optionId);
+    } else {
+      nextAssignedIds.delete(optionId);
+    }
+    setOptimisticAssignment(optionId, assigned);
 
     startTransition(async () => {
-      const result = await resendWelcomeEmailAction(row.id);
-
-      if (!result.ok) {
-        setServerMessage(result.message);
-        return;
+      const message = await onToggle(
+        optionId,
+        assigned,
+        Array.from(nextAssignedIds),
+      );
+      setServerMessage(message);
+      if (message) {
+        revertOptimisticAssignment(optionId, assigned);
+      } else {
+        setHasSuccessfulChange(true);
       }
-
-      handleOpenChange(false);
-      router.refresh();
+      setPendingOptionId(null);
     });
   }
 
   return (
-    <AlertDialog onOpenChange={handleOpenChange} open={open}>
-      <AlertDialogTrigger asChild>
-        <Button
-          aria-label={`Resend welcome email to ${memberName}`}
-          disabled={!row.primaryEmail}
-          size="xs"
-          title={
-            row.primaryEmail
-              ? `Resend welcome email to ${memberName}`
-              : "Member has no primary email"
-          }
-          type="button"
-          variant="outline"
-        >
-          <MailIcon className="size-3.5" />
-          Email
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Resend welcome email?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will send the welcome email to {memberName}.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <p className="text-xs text-muted-foreground">
-          Recipient: {row.primaryEmail ?? "No primary email"}
-        </p>
-        {serverMessage ? (
-          <p className="text-xs font-medium text-destructive">
-            {serverMessage}
-          </p>
-        ) : null}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <Button disabled={isPending || !row.primaryEmail} onClick={handleConfirm}>
-            {isPending ? "Sending..." : "Resend welcome email"}
+    <div className="flex min-w-0 flex-wrap gap-1">
+      {optimisticAssignedOptions.length ? (
+        optimisticAssignedOptions.slice(0, 3).map((option) => (
+          <Badge key={option.id} variant="outline">
+            {option.name}
+          </Badge>
+        ))
+      ) : (
+        <span className="text-muted-foreground">{emptyAssignedLabel}</span>
+      )}
+      <Popover onOpenChange={handleOpenChange} open={open}>
+        <PopoverTrigger asChild>
+          <Button
+            aria-label={label}
+            disabled={disabled}
+            size="icon-xs"
+            title={label}
+            type="button"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3" />
           </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-72 p-0">
+          <Command>
+            <CommandInput placeholder={label} />
+            <CommandList>
+              <CommandEmpty>{emptyLabel}</CommandEmpty>
+              <CommandGroup>
+                {options.map((option) => {
+                  const assigned = optimisticAssignedIds.has(option.id);
+                  const optionPending = pendingOptionId === option.id;
+                  return (
+                    <CommandItem
+                      className="justify-between"
+                      disabled={isPending}
+                      key={option.id}
+                      onSelect={() => handleToggle(option.id, !assigned)}
+                      value={option.name}
+                    >
+                      <span className="truncate">{option.name}</span>
+                      <Checkbox
+                        aria-label={`${assigned ? "Remove" : "Add"} ${
+                          option.name
+                        }`}
+                        checked={assigned}
+                        disabled={isPending}
+                        onClick={(event) => event.stopPropagation()}
+                        onCheckedChange={(checked) =>
+                          handleToggle(option.id, checked === true)
+                        }
+                      />
+                      {optionPending ? (
+                        <span className="sr-only">Updating</span>
+                      ) : null}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+          {serverMessage ? (
+            <p className="border-t px-3 py-2 text-xs font-medium text-destructive">
+              {serverMessage}
+            </p>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    </div>
   );
 }
 
 export function MembersManagement({
-  canResendWelcomeEmail,
+  applicationOptions,
   canCreate,
+  canManageRoles,
   filters,
   nextPageHref,
   page,
@@ -817,8 +918,9 @@ export function MembersManagement({
   roleOptions,
   totalCount,
 }: {
-  canResendWelcomeEmail: boolean;
+  applicationOptions: ApplicationOption[];
   canCreate: boolean;
+  canManageRoles: boolean;
   filters: MembersListFilters;
   nextPageHref: string;
   page: number;
@@ -831,6 +933,39 @@ export function MembersManagement({
   totalCount: number;
 }) {
   const router = useRouter();
+
+  async function updateInlineRoles(
+    row: MemberListRow,
+    assignedRoleIds: string[],
+  ) {
+    const result = await updateMemberRolesAction(
+      row.id,
+      assignedRoleIds.map((nextRoleId) => ({
+        expiresAt:
+          row.roles.find((role) => role.id === nextRoleId)?.expiresAt ?? "",
+        roleId: nextRoleId,
+      })),
+      { revalidate: false },
+    );
+    return result.ok ? null : result.message;
+  }
+
+  async function updateInlineApplicationAccess(
+    row: MemberListRow,
+    applicationId: string,
+    assigned: boolean,
+  ) {
+    const result = await setMemberApplicationAccessAction(
+      row.id,
+      {
+        applicationId,
+        assigned,
+      },
+      { revalidate: false },
+    );
+    return result.ok ? null : result.message;
+  }
+
   const columns: ColumnDef<MemberListRow>[] = [
     {
       id: "member",
@@ -902,19 +1037,71 @@ export function MembersManagement({
         </div>
       ),
       size: 260,
-      cell: ({ row }) => (
-        <div className="flex min-w-0 flex-wrap gap-1">
-          {row.original.roles.length ? (
-            row.original.roles.slice(0, 3).map((role) => (
-              <Badge key={role.id} variant="outline">
-                {role.name}
-              </Badge>
-            ))
-          ) : (
-            <span className="text-muted-foreground">No roles</span>
-          )}
-        </div>
-      ),
+      cell: ({ row }) =>
+        canManageRoles ? (
+          <InlineAssignmentPopover
+            assignedIds={new Set(row.original.roles.map((role) => role.id))}
+            emptyAssignedLabel="No roles"
+            emptyLabel="No roles found."
+            label="Add roles"
+            onAssignmentsChanged={() => router.refresh()}
+            onToggle={(_roleId, _assigned, assignedRoleIds) =>
+              updateInlineRoles(row.original, assignedRoleIds)
+            }
+            options={roleOptions}
+          />
+        ) : (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {row.original.roles.length ? (
+              row.original.roles.slice(0, 3).map((role) => (
+                <Badge key={role.id} variant="outline">
+                  {role.name}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-muted-foreground">No roles</span>
+            )}
+          </div>
+        ),
+    },
+    {
+      id: "applications",
+      header: "Applications",
+      size: 240,
+      cell: ({ row }) =>
+        canManageRoles ? (
+          <InlineAssignmentPopover
+            assignedIds={
+              new Set(
+                row.original.applications.map((application) => application.id),
+              )
+            }
+            emptyAssignedLabel="No applications"
+            emptyLabel="No applications found."
+            label="Grant application access"
+            onAssignmentsChanged={() => router.refresh()}
+            onToggle={(applicationId, assigned) =>
+              updateInlineApplicationAccess(
+                row.original,
+                applicationId,
+                assigned,
+              )
+            }
+            options={applicationOptions}
+          />
+        ) : (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {row.original.applications.length ? (
+              row.original.applications.slice(0, 3).map((application) => (
+                <Badge key={application.id} variant="outline">
+                  {application.name}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-muted-foreground">No applications</span>
+            )}
+          </div>
+        ),
     },
     {
       id: "membership",
@@ -937,12 +1124,9 @@ export function MembersManagement({
     {
       id: "actions",
       header: () => <span className="block text-right">Actions</span>,
-      size: canResendWelcomeEmail ? 176 : 96,
+      size: 96,
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
-          {canResendWelcomeEmail ? (
-            <ResendWelcomeEmailDialog row={row.original} />
-          ) : null}
           <Button asChild size="xs" variant="outline">
             <Link href={`/admin/members/${row.original.id}`}>Open</Link>
           </Button>
@@ -997,7 +1181,8 @@ export function MembersManagement({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       className={
-                        cell.column.id === "roles"
+                        cell.column.id === "roles" ||
+                        cell.column.id === "applications"
                           ? "whitespace-normal"
                           : undefined
                       }

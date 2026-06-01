@@ -40,15 +40,15 @@ describe("members management table implementation", () => {
     expect(source).toContain("Roles");
   });
 
-  test("wires each row to an individual welcome email resend action", () => {
+  test("removes resend welcome email from row actions", () => {
     const source = readFileSync(
       "src/components/admin/members/members-management.tsx",
       "utf8",
     );
 
-    expect(source).toContain("ResendWelcomeEmailDialog");
-    expect(source).toContain("resendWelcomeEmailAction");
-    expect(source).toContain("Resend welcome email");
+    expect(source).not.toContain("resendWelcomeEmailAction");
+    expect(source).not.toContain("MailIcon");
+    expect(source).not.toContain("ResendWelcomeEmailDialog");
     expect(source).not.toContain("type RowSelectionState");
     expect(source).not.toContain("enableRowSelection");
     expect(source).not.toContain("Select all visible members");
@@ -56,6 +56,45 @@ describe("members management table implementation", () => {
     expect(source).not.toContain("Bulk actions");
     expect(source).not.toContain("BulkResendWelcomeEmailDialog");
     expect(source).not.toContain("bulkResendWelcomeEmailAction");
+  });
+
+  test("renders popover controls for inline role and application assignment", () => {
+    const source = readFileSync(
+      "src/components/admin/members/members-management.tsx",
+      "utf8",
+    );
+
+    expect(source).toContain("InlineAssignmentPopover");
+    expect(source).toContain("updateMemberRolesAction");
+    expect(source).toContain("setMemberApplicationAccessAction");
+    expect(source).toContain('id: "applications"');
+    expect(source).toContain("CommandInput");
+    expect(source).toContain("PopoverTrigger");
+  });
+
+  test("optimistically updates inline assignment checkboxes without closing the popover", () => {
+    const source = readFileSync(
+      "src/components/admin/members/members-management.tsx",
+      "utf8",
+    );
+    const popoverSource = source.slice(
+      source.indexOf("function InlineAssignmentPopover"),
+      source.indexOf("export function MembersManagement"),
+    );
+    const updateSource = source.slice(
+      source.indexOf("async function updateInlineRoles"),
+      source.indexOf("const columns: ColumnDef<MemberListRow>[]"),
+    );
+
+    expect(popoverSource).toContain("optimisticAssignedIds");
+    expect(popoverSource).toContain("optimisticAssignedOptions");
+    expect(popoverSource).toContain("setOptimisticAssignedIds");
+    expect(popoverSource).toContain("revertOptimisticAssignment");
+    expect(popoverSource).toContain("emptyAssignedLabel");
+    expect(popoverSource).not.toContain("setOpen(false)");
+    expect(popoverSource).not.toContain("router.refresh()");
+    expect(updateSource).not.toContain("router.refresh()");
+    expect(updateSource).toContain("revalidate: false");
   });
 
   test("keeps table headers visible when there are no rows", () => {

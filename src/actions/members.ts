@@ -1145,6 +1145,7 @@ export async function endMembershipAction(
 export async function updateMemberRolesAction(
   memberId: string,
   assignments: RoleAssignmentInput[],
+  options: { revalidate?: boolean } = {},
 ): Promise<ActionResult> {
   const access = await requireMembersPermission("members.role_management");
   if (!access.ok) return access;
@@ -1229,6 +1230,8 @@ export async function updateMemberRolesAction(
     };
   }
 
-  revalidateMembers(memberId);
+  if (options.revalidate !== false) {
+    revalidateMembers(memberId);
+  }
   return { ok: true, message: "Member roles updated successfully." };
 }

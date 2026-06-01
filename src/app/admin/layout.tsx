@@ -21,8 +21,8 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-muted/20">
       <div className="flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-r bg-background lg:flex lg:flex-col">
-          <div className="grid gap-4 p-6">
+        <aside className="hidden w-72 shrink-0 border-r bg-background lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:self-start">
+          <div className="grid shrink-0 gap-4 p-6">
             <Link
               className="flex items-center gap-3 text-sm font-semibold tracking-tight"
               href="/admin"
@@ -39,11 +39,11 @@ export default async function AdminLayout({
             </Link>
           </div>
           <Separator />
-          <div className="flex-1 p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <AdminNavLinks permissions={permissions} />
           </div>
           <Separator />
-          <div className="flex items-center justify-between p-4">
+          <div className="flex shrink-0 items-center justify-between p-4">
             <div className="grid gap-1">
               <p className="text-sm font-medium">{user.fullName}</p>
               <p className="text-xs text-muted-foreground">@{user.username}</p>

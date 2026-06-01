@@ -7,6 +7,8 @@ import { NO_ROLES_MEMBER_ROLE_FILTER } from "@/lib/members";
 import {
   buildMembersOrderBy,
   buildMembersWhere,
+  getActiveRoleBadgesForMember,
+  getAssignedApplicationsForMember,
   getPrimaryEmailForMember,
 } from "@/lib/members-query";
 
@@ -34,6 +36,69 @@ describe("member query email selection", () => {
         },
       ]),
     ).toBe("primary@example.test");
+  });
+});
+
+describe("member query inline assignments", () => {
+  test("keeps role expiry dates for active role badges", () => {
+    expect(
+      getActiveRoleBadgesForMember(
+        "member-1",
+        [
+          {
+            expiresAt: new Date("2026-06-10T00:00:00.000Z"),
+            memberId: "member-1",
+            roleId: "role-1",
+            roleKey: "regional",
+            roleName: "Regional",
+          },
+          {
+            expiresAt: null,
+            memberId: "member-1",
+            roleId: "role-2",
+            roleKey: "trusted",
+            roleName: "Trusted",
+          },
+          {
+            expiresAt: null,
+            memberId: "member-2",
+            roleId: "role-3",
+            roleKey: "other",
+            roleName: "Other",
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        expiresAt: new Date("2026-06-10T00:00:00.000Z"),
+        id: "role-1",
+        key: "regional",
+        name: "Regional",
+      },
+      {
+        expiresAt: null,
+        id: "role-2",
+        key: "trusted",
+        name: "Trusted",
+      },
+    ]);
+  });
+
+  test("groups assigned applications for a member", () => {
+    expect(
+      getAssignedApplicationsForMember("member-1", [
+        {
+          applicationId: "app-1",
+          applicationName: "Forum",
+          memberId: "member-1",
+        },
+        {
+          applicationId: "app-2",
+          applicationName: "Wiki",
+          memberId: "member-2",
+        },
+      ]),
+    ).toEqual([{ id: "app-1", name: "Forum" }]);
   });
 });
 
