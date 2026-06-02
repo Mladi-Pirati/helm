@@ -71,7 +71,6 @@ export async function getMembershipApplicationsPage(
         mladiPiratiMembershipApplications.cityAndPostalCode,
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
       email: mladiPiratiMembershipApplications.email,
-      participationMode: mladiPiratiMembershipApplications.participationMode,
       status: mladiPiratiMembershipApplications.status,
       createdAt: mladiPiratiMembershipApplications.createdAt,
     })

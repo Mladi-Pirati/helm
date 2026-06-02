@@ -16,7 +16,6 @@ import { requirePermission } from "@/lib/auth/permissions";
 import {
   parseMembershipApplicationsFilters,
   type MembershipApplicationStatus,
-  type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 import { buildMembershipApplicationsWhere } from "@/lib/membership-applications-query";
@@ -67,7 +66,6 @@ export async function GET(request: NextRequest) {
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
       email: mladiPiratiMembershipApplications.email,
       phone: mladiPiratiMembershipApplications.phone,
-      participationMode: mladiPiratiMembershipApplications.participationMode,
       discordUsername: mladiPiratiMembershipApplications.discordUsername,
       motivation: mladiPiratiMembershipApplications.motivation,
       consentsToDataProcessing:
@@ -101,7 +99,6 @@ export async function GET(request: NextRequest) {
   for (const row of rows) {
     const pdfRow: MembershipApplicationPdfRow = {
       ...row,
-      participationMode: row.participationMode as ParticipationMode,
       residenceRegion: row.residenceRegion as ResidenceRegion,
       status: row.status as MembershipApplicationStatus,
     };

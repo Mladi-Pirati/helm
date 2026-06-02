@@ -1,0 +1,1 @@
+ALTER TABLE "mladi_pirati_membership_applications" DROP COLUMN "participation_mode";

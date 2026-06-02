@@ -15,19 +15,6 @@ export const residenceRegions = [
 
 export type ResidenceRegion = (typeof residenceRegions)[number];
 
-export const participationModes = [
-  "Podpornik (prejemaš redne novice o delovanju ter vabila na dogodke)",
-  "Aktiven član (se aktivno udejstvuješ)",
-] as const;
-
-export type ParticipationMode = (typeof participationModes)[number];
-
-export const participationModeLabels: Record<ParticipationMode, string> = {
-  "Podpornik (prejemaš redne novice o delovanju ter vabila na dogodke)":
-    "Podpornik",
-  "Aktiven član (se aktivno udejstvuješ)": "Aktiven član",
-};
-
 export const membershipApplicationStatuses = [
   "pending",
   "approved",

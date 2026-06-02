@@ -32,9 +32,7 @@ import {
   buildMembershipApplicationDetailsHref,
   getMembershipApplicationStatusVariant,
   membershipApplicationStatusLabels,
-  participationModeLabels,
   type MembershipApplicationStatus,
-  type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 
@@ -45,7 +43,6 @@ export type MembershipApplicationListRow = {
   cityAndPostalCode: string;
   residenceRegion: ResidenceRegion;
   email: string;
-  participationMode: ParticipationMode;
   status: MembershipApplicationStatus;
   createdAt: string;
 };
@@ -163,16 +160,6 @@ export function MembershipApplicationsManagement({
           title={`${row.original.cityAndPostalCode} - ${row.original.residenceRegion}`}
         >
           {row.original.cityAndPostalCode} - {row.original.residenceRegion}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "participationMode",
-      header: "Participation",
-      size: 180,
-      cell: ({ row }) => (
-        <span className="block truncate">
-          {participationModeLabels[row.original.participationMode]}
         </span>
       ),
     },

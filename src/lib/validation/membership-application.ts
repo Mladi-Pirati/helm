@@ -1,12 +1,8 @@
 import { z } from "zod";
 
-import {
-  participationModes,
-  residenceRegions,
-} from "@/lib/membership-applications";
+import { residenceRegions } from "@/lib/membership-applications";
 
 export const RESIDENCE_REGIONS = residenceRegions;
-export const PARTICIPATION_MODES = participationModes;
 
 const optionalTrimmedString = (
   max: number,
@@ -65,9 +61,6 @@ export const membershipApplicationSchema = z
     }),
     email: z.string().trim().email("A valid email address is required."),
     phone: optionalTrimmedString(40, "Phone must be 40 characters or fewer."),
-    participationMode: z.enum(PARTICIPATION_MODES, {
-      error: "Participation mode must be one of the hosted form options.",
-    }),
     discordUsername: optionalTrimmedString(
       120,
       "Discord username must be 120 characters or fewer.",

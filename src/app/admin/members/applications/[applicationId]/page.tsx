@@ -25,9 +25,7 @@ import {
   getMembershipApplicationStatusVariant,
   membershipApplicationStatusLabels,
   parseMembershipApplicationsFilters,
-  participationModeLabels,
   type MembershipApplicationsSearchParams,
-  type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 
@@ -81,7 +79,6 @@ export default async function AdminMembershipApplicationPage({
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
       email: mladiPiratiMembershipApplications.email,
       phone: mladiPiratiMembershipApplications.phone,
-      participationMode: mladiPiratiMembershipApplications.participationMode,
       discordUsername: mladiPiratiMembershipApplications.discordUsername,
       motivation: mladiPiratiMembershipApplications.motivation,
       consentsToDataProcessing:
@@ -102,7 +99,6 @@ export default async function AdminMembershipApplicationPage({
     notFound();
   }
 
-  const participationMode = application.participationMode as ParticipationMode;
   const residenceRegion = application.residenceRegion as ResidenceRegion;
   const displayName =
     `${application.firstName} ${application.lastName}`.trim();
@@ -205,14 +201,10 @@ export default async function AdminMembershipApplicationPage({
 
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Participation and motivation</CardTitle>
+            <CardTitle>Motivation</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4">
-              <DetailItem
-                label="Participation mode"
-                value={participationModeLabels[participationMode]}
-              />
               <DetailItem
                 label="Motivation"
                 value={

@@ -9,7 +9,6 @@ import {
   membershipApplicationStatuses,
   parseMembershipApplicationsFilters,
   type MembershipApplicationsSearchParams,
-  type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 import { getMembershipApplicationsPage } from "@/lib/membership-applications-query";
@@ -110,7 +109,6 @@ export default async function AdminMembershipApplicationsPage({
         queryString={queryString}
         rows={rows.map((row) => ({
           ...row,
-          participationMode: row.participationMode as ParticipationMode,
           residenceRegion: row.residenceRegion as ResidenceRegion,
           createdAt: row.createdAt.toISOString(),
         }))}

@@ -8,8 +8,6 @@ import { requirePermission } from "@/lib/auth/permissions";
 import {
   membershipApplicationStatusLabels,
   parseMembershipApplicationsFilters,
-  participationModeLabels,
-  type ParticipationMode,
   type MembershipApplicationStatus,
 } from "@/lib/membership-applications";
 import { buildMembershipApplicationsWhere } from "@/lib/membership-applications-query";
@@ -32,7 +30,6 @@ const CSV_HEADERS = [
   "residenceRegion",
   "email",
   "phone",
-  "participationMode",
   "discordUsername",
   "motivation",
   "consentsToDataProcessing",
@@ -83,7 +80,6 @@ export async function GET(request: NextRequest) {
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
       email: mladiPiratiMembershipApplications.email,
       phone: mladiPiratiMembershipApplications.phone,
-      participationMode: mladiPiratiMembershipApplications.participationMode,
       discordUsername: mladiPiratiMembershipApplications.discordUsername,
       motivation: mladiPiratiMembershipApplications.motivation,
       consentsToDataProcessing:
@@ -102,7 +98,6 @@ export async function GET(request: NextRequest) {
 
   for (const row of rows) {
     const status = row.status as MembershipApplicationStatus;
-    const participationMode = row.participationMode as ParticipationMode;
 
     bodyLines.push(
       toCsvRow([
@@ -120,7 +115,6 @@ export async function GET(request: NextRequest) {
         row.residenceRegion,
         row.email,
         row.phone,
-        participationModeLabels[participationMode],
         row.discordUsername,
         row.motivation,
         row.consentsToDataProcessing ? "true" : "false",

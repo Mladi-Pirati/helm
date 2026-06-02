@@ -74,7 +74,6 @@ const validMembershipApplicationPayload = {
   cityAndPostalCode: "1000 Ljubljana",
   residenceRegion: "Osrednjeslovenska",
   email: "ada@example.com",
-  participationMode: "Aktiven član (se aktivno udejstvuješ)" as const,
   consentsToDataProcessing: true,
   acceptsStatuteAndProgram: true,
 };
@@ -306,6 +305,32 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
     expect(JSON.stringify(discordPayload)).not.toContain("rawPayload");
   });
 
+  test("ignores legacy participationMode submissions", async () => {
+    const { POST } = await routeModulePromise;
+    const legacyPayload = {
+      ...validMembershipApplicationPayload,
+      participationMode: "Aktiven član (se aktivno udejstvuješ)",
+    };
+    const response = await POST(createRequest(legacyPayload));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      id: "application-123",
+      status: "pending",
+    });
+    expect(insertedValues).toEqual([
+      {
+        ...validMembershipApplicationPayload,
+        phone: null,
+        discordUsername: null,
+        motivation: null,
+        status: "pending",
+        rawPayload: validMembershipApplicationPayload,
+      },
+    ]);
+    expect(JSON.stringify(insertedValues)).not.toContain("participationMode");
+  });
+
   test("returns 429 captcha_required when the normal rate limit is exceeded", async () => {
     const { POST } = await routeModulePromise;
 
@@ -498,8 +523,6 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
           validMembershipApplicationPayload.cityAndPostalCode,
         residenceRegion: validMembershipApplicationPayload.residenceRegion,
         email: validMembershipApplicationPayload.email,
-        participationMode:
-          validMembershipApplicationPayload.participationMode,
         consentsToDataProcessing:
           validMembershipApplicationPayload.consentsToDataProcessing,
         acceptsStatuteAndProgram:

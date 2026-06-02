@@ -15,9 +15,7 @@ import {
   parseDateOnly,
 } from "@/lib/date-format";
 import {
-  participationModeLabels,
   type MembershipApplicationStatus,
-  type ParticipationMode,
   type ResidenceRegion,
 } from "@/lib/membership-applications";
 
@@ -49,7 +47,6 @@ export type MembershipApplicationPdfRow = {
   residenceRegion: ResidenceRegion;
   email: string;
   phone: string | null;
-  participationMode: ParticipationMode;
   discordUsername: string | null;
   motivation: string | null;
   consentsToDataProcessing: boolean;
@@ -268,11 +265,6 @@ export function MembershipApplicationPdfDocument({
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sodelovanje in motivacija</Text>
           <View style={styles.grid}>
-            <Field
-              label="Način sodelovanja"
-              value={participationModeLabels[row.participationMode]}
-              full
-            />
             <View style={styles.cellFull}>
               <Text style={styles.fieldLabel}>Motivacija</Text>
               {row.motivation ? (

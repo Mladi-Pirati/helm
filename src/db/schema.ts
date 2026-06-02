@@ -82,7 +82,6 @@ export const mladiPiratiMembershipApplications = pgTable(
     residenceRegion: text("residence_region").notNull(),
     email: text("email").notNull(),
     phone: text("phone"),
-    participationMode: text("participation_mode").notNull(),
     discordUsername: text("discord_username"),
     motivation: text("motivation"),
     consentsToDataProcessing: boolean("consents_to_data_processing").notNull(),
