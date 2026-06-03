@@ -950,7 +950,10 @@ export function MembersManagement({
     return result.ok ? null : result.message;
   }
 
-  const columns: Array<ColumnDef<MemberListRow>> = [
+  // Rule disabled because for some fucking reason
+  // the test fails with Array<type> here so we're stuck with type[]
+  // eslint-disable-next-line @typescript-eslint/array-type
+  const columns: ColumnDef<MemberListRow>[] = [
     {
       id: "member",
       header: () => {

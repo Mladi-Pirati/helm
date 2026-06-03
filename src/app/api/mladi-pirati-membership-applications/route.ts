@@ -71,6 +71,7 @@ function getRawPayload(body: unknown) {
 
   const rawPayload = { ...(body as Record<string, unknown>) };
   delete rawPayload.captchaToken;
+  delete rawPayload.participationMode;
 
   return rawPayload;
 }
