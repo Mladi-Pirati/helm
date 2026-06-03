@@ -70,6 +70,7 @@ export async function getMembershipApplicationsPage(
       cityAndPostalCode:
         mladiPiratiMembershipApplications.cityAndPostalCode,
       residenceRegion: mladiPiratiMembershipApplications.residenceRegion,
+      dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       email: mladiPiratiMembershipApplications.email,
       status: mladiPiratiMembershipApplications.status,
       createdAt: mladiPiratiMembershipApplications.createdAt,

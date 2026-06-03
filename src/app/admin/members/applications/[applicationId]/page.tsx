@@ -1,3 +1,4 @@
+import { differenceInYears } from "date-fns";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -180,7 +181,7 @@ export default async function AdminMembershipApplicationPage({
             <dl className="grid gap-4 sm:grid-cols-2">
               <DetailItem
                 label="Date of birth"
-                value={formatDateOnly(application.dateOfBirth)}
+                value={`${formatDateOnly(application.dateOfBirth)} (${differenceInYears(new Date(), parseDateOnly(application.dateOfBirth))})`}
               />
               <DetailItem
                 label="Place of birth"

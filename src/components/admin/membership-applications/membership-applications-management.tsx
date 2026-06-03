@@ -27,7 +27,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkMembershipApplicationActionDialog } from "@/components/admin/membership-applications/bulk-membership-application-action-dialog";
 import { DeleteMembershipApplicationDialog } from "@/components/admin/membership-applications/delete-membership-application-dialog";
-import { formatSlovenianDateTime } from "@/lib/date-format";
+import { differenceInYears } from "date-fns";
+
+import { formatSlovenianDateTime, parseDateOnly } from "@/lib/date-format";
 import {
   buildMembershipApplicationDetailsHref,
   getMembershipApplicationStatusVariant,
@@ -40,6 +42,7 @@ export type MembershipApplicationListRow = {
   id: string;
   firstName: string;
   lastName: string;
+  dateOfBirth: string;
   cityAndPostalCode: string;
   residenceRegion: ResidenceRegion;
   email: string;
@@ -134,9 +137,21 @@ export function MembershipApplicationsManagement({
       size: 220,
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="truncate font-medium text-foreground">
-            {getApplicationDisplayName(row.original)}
-          </p>
+          <Link
+            className="truncate font-medium text-foreground hover:underline"
+            href={buildMembershipApplicationDetailsHref(
+              row.original.id,
+              queryString,
+            )}
+            prefetch={false}
+          >
+            {getApplicationDisplayName(row.original)} (
+            {differenceInYears(
+              new Date(),
+              parseDateOnly(row.original.dateOfBirth),
+            )}
+            )
+          </Link>
         </div>
       ),
     },
