@@ -18,14 +18,14 @@ type TurnstileResult =
   | {
       ok: false;
       reason: "invalid";
-      errorCodes?: string[];
+      errorCodes?: Array<string>;
       hostname?: string | null;
     }
   | {
       ok: false;
       reason: "unavailable";
       cause?: string;
-      errorCodes?: string[];
+      errorCodes?: Array<string>;
       hostname?: string | null;
       status?: number | null;
     };

@@ -18,8 +18,9 @@ describe("sendResendEmail", () => {
         from: string;
         html: string;
         subject: string;
+        tags?: Array<{ name: string; value: string }>;
         text: string;
-        to: string | string[];
+        to: string | Array<string>;
       };
     }> = [];
 

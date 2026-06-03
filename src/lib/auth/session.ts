@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { forbidden, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { auth } from "@/auth";

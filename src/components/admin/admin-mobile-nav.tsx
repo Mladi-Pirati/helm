@@ -19,7 +19,7 @@ import Link from "next/link";
 type AdminMobileNavProps = {
   fullName: string;
   username: string;
-  permissions: string[];
+  permissions: Array<string>;
 };
 
 export function AdminMobileNav({

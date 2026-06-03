@@ -12,7 +12,7 @@ export type ModuleListRow = {
   description: string | null;
 };
 
-function ModuleRows({ rows }: { rows: ModuleListRow[] }) {
+function ModuleRows({ rows }: { rows: Array<ModuleListRow> }) {
   if (!rows.length) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-muted-foreground">
@@ -49,7 +49,7 @@ function ModuleRows({ rows }: { rows: ModuleListRow[] }) {
   );
 }
 
-export function ModulesManagement({ rows }: { rows: ModuleListRow[] }) {
+export function ModulesManagement({ rows }: { rows: Array<ModuleListRow> }) {
   return (
     <div className="grid gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

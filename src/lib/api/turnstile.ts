@@ -12,7 +12,7 @@ export type VerifyTurnstileTokenResult =
   | {
       ok: false;
       reason: "invalid";
-      errorCodes: string[];
+      errorCodes: Array<string>;
       hostname: string | null;
     }
   | {
@@ -24,14 +24,14 @@ export type VerifyTurnstileTokenResult =
         | "request_failed"
         | "bad_response_status"
         | "invalid_response_body";
-      errorCodes: string[];
+      errorCodes: Array<string>;
       hostname: string | null;
       status: number | null;
     };
 
 type TurnstileLogDetails = Record<
   string,
-  boolean | number | string | string[] | null | undefined
+  boolean | number | string | Array<string> | null | undefined
 >;
 
 function logTurnstileEvent(
@@ -87,7 +87,7 @@ function hasBooleanSuccess(result: TurnstileSiteverifyResponse) {
   return typeof result.success === "boolean";
 }
 
-function hasInvalidSecretError(errorCodes: string[]) {
+function hasInvalidSecretError(errorCodes: Array<string>) {
   return (
     errorCodes.includes("missing-input-secret") ||
     errorCodes.includes("invalid-input-secret")

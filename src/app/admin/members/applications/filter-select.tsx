@@ -20,7 +20,7 @@ export function FilterSelect({
 }: {
   defaultValue?: string;
   name: string;
-  options: { label: string; value: string }[];
+  options: Array<{ label: string; value: string }>;
   placeholder: string;
 }) {
   const hiddenInputRef = useRef<HTMLInputElement>(null);

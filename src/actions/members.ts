@@ -493,7 +493,7 @@ export async function resendWelcomeEmailAction(
 export async function searchKeycloakUsersAction(query: string): Promise<
   ActionResult<{
     ok: true;
-    users: {
+    users: Array<{
       email: string | null;
       enabled: boolean;
       firstName: string | null;
@@ -501,7 +501,7 @@ export async function searchKeycloakUsersAction(query: string): Promise<
       id: string;
       lastName: string | null;
       username: string;
-    }[];
+    }>;
   }>
 > {
   const access = await requireMembersPermission("members.create");
@@ -978,7 +978,7 @@ export async function deleteContactAction(
 
 export async function reorderContactsAction(
   memberId: string,
-  contactIds: string[],
+  contactIds: Array<string>,
 ): Promise<ActionResult> {
   const access = await requireMembersPermission("members.update");
   if (!access.ok) return access;
@@ -1134,7 +1134,7 @@ export async function endMembershipAction(
 
 export async function updateMemberRolesAction(
   memberId: string,
-  assignments: RoleAssignmentInput[],
+  assignments: Array<RoleAssignmentInput>,
   options: { revalidate?: boolean } = {},
 ): Promise<ActionResult> {
   const access = await requireMembersPermission("members.role_management");

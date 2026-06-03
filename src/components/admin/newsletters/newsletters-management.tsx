@@ -29,7 +29,7 @@ function NewsletterRows({
   rows,
 }: {
   canManage: boolean;
-  rows: NewsletterListRow[];
+  rows: Array<NewsletterListRow>;
 }) {
   if (!rows.length) {
     return (
@@ -95,8 +95,8 @@ export function NewslettersManagement({
   canManage,
   showArchived,
 }: {
-  activeRows: NewsletterListRow[];
-  archivedRows: NewsletterListRow[];
+  activeRows: Array<NewsletterListRow>;
+  archivedRows: Array<NewsletterListRow>;
   canManage: boolean;
   showArchived: boolean;
 }) {

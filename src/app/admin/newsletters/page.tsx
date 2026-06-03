@@ -8,7 +8,7 @@ import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 export default async function AdminNewslettersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ archived?: string | string[] | undefined }>;
+  searchParams: Promise<{ archived?: string | Array<string> | undefined }>;
 }) {
   const { permissions } = await getCurrentUserPermissions();
   const rawSearchParams = await searchParams;

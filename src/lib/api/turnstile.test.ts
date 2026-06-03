@@ -83,7 +83,7 @@ describe("verifyTurnstileToken", () => {
       ok: true,
       hostname: "localhost",
     });
-    expect(fetchUrl).toBe(
+    expect(fetchUrl!).toBe(
       "https://challenges.cloudflare.com/turnstile/v0/siteverify",
     );
     expect(fetchInit?.method).toBe("POST");
@@ -110,7 +110,7 @@ describe("verifyTurnstileToken", () => {
         success: true,
         hostname: "localhost",
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const result = await verifyTurnstileToken("captcha-token");
 
@@ -131,7 +131,7 @@ describe("verifyTurnstileToken", () => {
         success: false,
         hostname: "localhost",
         "error-codes": ["timeout-or-duplicate"],
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     const result = await verifyTurnstileToken("expired-token");
 
@@ -149,7 +149,7 @@ describe("verifyTurnstileToken", () => {
         success: false,
         hostname: "localhost",
         "error-codes": ["invalid-input-secret"],
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     const result = await verifyTurnstileToken("captcha-token");
 
@@ -170,7 +170,7 @@ describe("verifyTurnstileToken", () => {
       createJsonResponse({
         success: true,
         hostname: "localhost",
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     const result = await verifyTurnstileToken("captcha-token");
 
@@ -186,7 +186,7 @@ describe("verifyTurnstileToken", () => {
     globalThis.fetch = (async () =>
       createJsonResponse({
         hostname: "localhost",
-      })) as typeof fetch;
+      })) as unknown as typeof fetch;
 
     const result = await verifyTurnstileToken("captcha-token");
 

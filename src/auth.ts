@@ -6,7 +6,6 @@ import { z } from "zod";
 import { db } from "@/db";
 import { members, memberRoles, roles } from "@/db/schema";
 import {
-  getKeycloakFullNameFromProfile,
   getKeycloakUsernameFromProfile,
   keycloakAccessTokenHasClientRole,
   keycloakProfileHasClientRole,

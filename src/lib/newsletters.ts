@@ -1,5 +1,5 @@
 export type NewsletterSearchParams = {
-  q?: string | string[] | undefined;
+  q?: string | Array<string> | undefined;
 };
 
 export type NewsletterSubscriptionListFilters = {
@@ -7,7 +7,7 @@ export type NewsletterSubscriptionListFilters = {
 };
 
 function getSingleSearchParam(
-  value: string | string[] | undefined,
+  value: string | Array<string> | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }

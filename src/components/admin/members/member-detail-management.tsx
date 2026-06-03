@@ -300,11 +300,11 @@ function ProfileTab({
   );
 }
 
-const deleteMemberOptions: {
+const deleteMemberOptions: Array<{
   description: string;
   label: string;
   mode: DeleteMemberMode;
-}[] = [
+}> = [
   {
     description: "Delete only this member record and local profile data.",
     label: "Delete locally",
@@ -535,7 +535,7 @@ function ContactsTab({
   memberId,
 }: {
   canUpdate: boolean;
-  contacts: ContactRow[];
+  contacts: Array<ContactRow>;
   memberId: string;
 }) {
   const router = useRouter();
@@ -571,7 +571,7 @@ function ContactsTab({
         <DragDropProvider
           onDragEnd={(event) => {
             if (event.canceled) return;
-            const next = move(contactsState, event) as ContactRow[];
+            const next = move(contactsState, event) as Array<ContactRow>;
             setContactsState(next);
             startTransition(async () => {
               const result = await reorderContactsAction(
@@ -637,7 +637,7 @@ function AddressesTab({
   canUpdate,
   memberId,
 }: {
-  addresses: AddressRow[];
+  addresses: Array<AddressRow>;
   canUpdate: boolean;
   memberId: string;
 }) {
@@ -782,7 +782,7 @@ function MembershipsTab({
 }: {
   canUpdate: boolean;
   memberId: string;
-  memberships: MembershipRow[];
+  memberships: Array<MembershipRow>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -935,11 +935,11 @@ function RolesTab({
   memberId,
   roles,
 }: {
-  assignedRoles: AssignedRole[];
+  assignedRoles: Array<AssignedRole>;
   canManageRoles: boolean;
   highestManagedRank: number | null;
   memberId: string;
-  roles: RoleOption[];
+  roles: Array<RoleOption>;
 }) {
   const router = useRouter();
   const [message, setMessage] = useState<string | null>(null);
@@ -1023,8 +1023,8 @@ function ApplicationsTab({
   canManageRoles,
   memberId,
 }: {
-  applications: ApplicationOption[];
-  assignedApplications: AssignedApplication[];
+  applications: Array<ApplicationOption>;
+  assignedApplications: Array<AssignedApplication>;
   canManageRoles: boolean;
   memberId: string;
 }) {
@@ -1142,18 +1142,18 @@ export function MemberDetailManagement({
   memberships,
   roles,
 }: {
-  addresses: AddressRow[];
-  applications: ApplicationOption[];
-  assignedApplications: AssignedApplication[];
-  assignedRoles: AssignedRole[];
+  addresses: Array<AddressRow>;
+  applications: Array<ApplicationOption>;
+  assignedApplications: Array<AssignedApplication>;
+  assignedRoles: Array<AssignedRole>;
   canDelete: boolean;
   canManageRoles: boolean;
   canUpdate: boolean;
-  contacts: ContactRow[];
+  contacts: Array<ContactRow>;
   highestManagedRank: number | null;
   member: MemberDetail;
-  memberships: MembershipRow[];
-  roles: RoleOption[];
+  memberships: Array<MembershipRow>;
+  roles: Array<RoleOption>;
 }) {
   const fullName = `${member.firstName} ${member.lastName}`.trim();
   const profileKey = [

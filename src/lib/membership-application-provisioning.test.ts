@@ -36,7 +36,7 @@ function createKeycloakDouble(
     lastName: string;
     username: string;
   }> = [];
-  const requiredActionsEmails: Array<{ actions: string[]; userId: string }> = [];
+  const requiredActionsEmails: Array<{ actions: Array<string>; userId: string }> = [];
 
   const keycloak: MembershipApplicationProvisioningKeycloak = {
     async createUser(values) {
@@ -67,9 +67,9 @@ function createKeycloakDouble(
 }
 
 function createRepositoryDouble() {
-  const createdProfiles: Parameters<
+  const createdProfiles: Array<Parameters<
     MembershipApplicationProvisioningRepository["createFullMemberProfile"]
-  >[0][] = [];
+  >[0]> = [];
 
   const repository: MembershipApplicationProvisioningRepository = {
     async createFullMemberProfile(input) {
@@ -87,7 +87,7 @@ function createRepositoryDouble() {
 function createApprovalEmailDouble(
   send: MembershipApprovalEmailSender["send"] = async () => true,
 ) {
-  const approvalEmails: MembershipApprovalEmailInput[] = [];
+  const approvalEmails: Array<MembershipApprovalEmailInput> = [];
   const approvalEmail: MembershipApprovalEmailSender = {
     async send(input) {
       approvalEmails.push(input);

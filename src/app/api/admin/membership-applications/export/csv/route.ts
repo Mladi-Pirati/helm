@@ -51,7 +51,7 @@ function escapeCsvField(value: unknown): string {
   return stringValue;
 }
 
-function toCsvRow(values: readonly unknown[]): string {
+function toCsvRow(values: ReadonlyArray<unknown>): string {
   return values.map(escapeCsvField).join(",");
 }
 
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
     : baseQuery
   ).orderBy(desc(mladiPiratiMembershipApplications.createdAt));
 
-  const bodyLines: string[] = [toCsvRow(CSV_HEADERS)];
+  const bodyLines: Array<string> = [toCsvRow(CSV_HEADERS)];
 
   for (const row of rows) {
     const status = row.status as MembershipApplicationStatus;

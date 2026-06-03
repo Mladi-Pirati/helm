@@ -19,7 +19,7 @@ const NEWSLETTER_RATE_LIMIT = {
 
 type NewsletterLogDetails = Record<
   string,
-  boolean | number | string | string[] | null | undefined
+  boolean | number | string | Array<string> | null | undefined
 >;
 
 function logNewsletterEvent(

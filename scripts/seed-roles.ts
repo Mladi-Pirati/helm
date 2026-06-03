@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  members,
   modules,
   permissions,
   rolePermissions,
@@ -15,7 +14,7 @@ async function seed() {
   console.log("Seeding roles and permissions...");
 
   // ── MODULES ─────────────────────────────────────────────
-  const membersModule = await db
+  const _membersModule = await db
     .insert(modules)
     .values({
       key: "members",
@@ -25,7 +24,7 @@ async function seed() {
     .onConflictDoNothing({ target: modules.key })
     .returning();
 
-  const newslettersModule = await db
+  const _newslettersModule = await db
     .insert(modules)
     .values({
       key: "newsletters",
@@ -35,7 +34,7 @@ async function seed() {
     .onConflictDoNothing({ target: modules.key })
     .returning();
 
-  const settingsModule = await db
+  const _settingsModule = await db
     .insert(modules)
     .values({
       key: "settings",

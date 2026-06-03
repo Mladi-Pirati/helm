@@ -55,10 +55,10 @@ export const DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE = 50;
 export const MAX_MEMBERSHIP_APPLICATIONS_PAGE_SIZE = 100;
 
 export type MembershipApplicationsSearchParams = {
-  page?: string | string[] | undefined;
-  pageSize?: string | string[] | undefined;
-  q?: string | string[] | undefined;
-  status?: string | string[] | undefined;
+  page?: string | Array<string> | undefined;
+  pageSize?: string | Array<string> | undefined;
+  q?: string | Array<string> | undefined;
+  status?: string | Array<string> | undefined;
 };
 
 export type MembershipApplicationsListFilters = {
@@ -69,7 +69,7 @@ export type MembershipApplicationsListFilters = {
 };
 
 function getSingleSearchParam(
-  value: string | string[] | undefined,
+  value: string | Array<string> | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -184,7 +184,7 @@ export function formatPendingMembershipApplicationCount(count: number) {
   return count > 99 ? "99+" : count.toString();
 }
 
-export function dedupeMembershipApplicationIds(applicationIds: string[]) {
+export function dedupeMembershipApplicationIds(applicationIds: Array<string>) {
   return Array.from(
     new Set(
       applicationIds

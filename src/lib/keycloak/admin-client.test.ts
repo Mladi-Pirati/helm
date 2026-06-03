@@ -16,9 +16,9 @@ type RecordedRequest = {
 
 function createAdapter(handler: (config: AxiosRequestConfig) => unknown): {
   adapter: AxiosAdapter;
-  requests: RecordedRequest[];
+  requests: Array<RecordedRequest>;
 } {
-  const requests: RecordedRequest[] = [];
+  const requests: Array<RecordedRequest> = [];
 
   return {
     requests,

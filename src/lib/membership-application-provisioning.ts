@@ -18,7 +18,7 @@ import {
   type MembershipApprovalEmailSender,
 } from "@/lib/email/membership-approval";
 
-const REQUIRED_KEYCLOAK_ACTIONS: KeycloakRequiredAction[] = [
+const REQUIRED_KEYCLOAK_ACTIONS: Array<KeycloakRequiredAction> = [
   "VERIFY_EMAIL",
   "UPDATE_PASSWORD",
 ];
@@ -42,7 +42,7 @@ export type MembershipApplicationProvisioningKeycloak = {
   findUserByUsername(username: string): Promise<KeycloakUser | null>;
   sendRequiredActionsEmail(
     userId: string,
-    actions: KeycloakRequiredAction[],
+    actions: Array<KeycloakRequiredAction>,
   ): Promise<void>;
 };
 

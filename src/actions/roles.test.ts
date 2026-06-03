@@ -6,11 +6,11 @@ let currentUser: { keycloakUserId: string } | null = {
 };
 let currentMemberId: string | null = "current-member";
 let maxRoleRank: number | null = null;
-let currentUserRoleRanks: number[] = [2];
+let currentUserRoleRanks: Array<number> = [2];
 let roleRows: Array<{ id: string; rank: number }> = [];
 let insertedRoles: Array<Record<string, unknown>> = [];
 let updatedRoleValues: Array<Record<string, unknown>> = [];
-let revalidatedPaths: string[] = [];
+let revalidatedPaths: Array<string> = [];
 
 function hasPermission(permissionKey: string) {
   expect(permissionKey).toBe("access-control.manage_roles");

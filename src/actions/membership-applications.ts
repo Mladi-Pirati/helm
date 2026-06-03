@@ -358,7 +358,7 @@ export async function deleteMembershipApplicationAction(
 
 export async function bulkMembershipApplicationAction(values: {
   action: BulkMembershipApplicationAction;
-  applicationIds: string[];
+  applicationIds: Array<string>;
   rejectionReason?: string;
 }): Promise<BulkMembershipApplicationActionResult> {
   const parsedValues = bulkMembershipApplicationActionSchema.safeParse(values);
@@ -384,7 +384,7 @@ export async function bulkMembershipApplicationAction(values: {
   }
 
   const applicationIds = parsedValues.data.applicationIds;
-  let affectedApplicationIds: string[] = [];
+  let affectedApplicationIds: Array<string> = [];
   let memberCreationFailureCount = 0;
 
   try {
@@ -478,7 +478,7 @@ function getBulkMembershipApplicationStatus(
   }
 }
 
-function revalidateMembershipApplicationPathsForIds(applicationIds: string[]) {
+function revalidateMembershipApplicationPathsForIds(applicationIds: Array<string>) {
   revalidatePath("/admin/members/applications");
   revalidatePath("/admin/members");
 

@@ -12,11 +12,11 @@ import {
 
 type LoginPageProps = {
   searchParams?: Promise<{
-    error?: string | string[];
+    error?: string | Array<string>;
   }>;
 };
 
-function getLoginErrorMessage(error: string | string[] | undefined) {
+function getLoginErrorMessage(error: string | Array<string> | undefined) {
   const value = Array.isArray(error) ? error[0] : error;
 
   if (value === "AccessDenied") {

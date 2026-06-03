@@ -8,24 +8,24 @@ export const memberListSorts = ["name-asc", "name-desc"] as const;
 export type MemberListSort = (typeof memberListSorts)[number];
 
 export type MembersSearchParams = {
-  page?: string | string[];
-  pageSize?: string | string[];
-  q?: string | string[];
-  roleId?: string | string[];
-  sort?: string | string[];
-  status?: string | string[];
+  page?: string | Array<string>;
+  pageSize?: string | Array<string>;
+  q?: string | Array<string>;
+  roleId?: string | Array<string>;
+  sort?: string | Array<string>;
+  status?: string | Array<string>;
 };
 
 export type MembersListFilters = {
   page: number;
   pageSize: number;
   q: string;
-  roleId: string[];
+  roleId: Array<string>;
   sort: MemberListSort;
   status: MemberListStatus;
 };
 
-function firstParam(value: string | string[] | undefined) {
+function firstParam(value: string | Array<string> | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -36,7 +36,7 @@ function parsePositiveInt(value: string | undefined, fallback: number) {
   return parsed;
 }
 
-function parseRoleIds(value: string | string[] | undefined) {
+function parseRoleIds(value: string | Array<string> | undefined) {
   const values = Array.isArray(value) ? value : value ? [value] : [];
   return Array.from(
     new Set(values.map((roleId) => roleId.trim()).filter(Boolean)),

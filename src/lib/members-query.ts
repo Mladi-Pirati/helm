@@ -255,7 +255,7 @@ export async function getMembersPage(filters: MembersListFilters) {
 
 export function getActiveRoleBadgesForMember(
   memberId: string,
-  roleRows: ActiveRoleRow[],
+  roleRows: Array<ActiveRoleRow>,
 ) {
   return roleRows
     .filter((role) => role.memberId === memberId)
@@ -268,7 +268,7 @@ export function getActiveRoleBadgesForMember(
 
 export function getAssignedApplicationsForMember(
   memberId: string,
-  applicationAccessRows: MemberApplicationAccessRow[],
+  applicationAccessRows: Array<MemberApplicationAccessRow>,
 ) {
   return applicationAccessRows
     .filter((application) => application.memberId === memberId)
@@ -280,12 +280,12 @@ export function getAssignedApplicationsForMember(
 
 export function getPrimaryEmailForMember(
   memberId: string,
-  contactRows: {
+  contactRows: Array<{
     isPrimary: boolean;
     memberId: string;
     sortOrder: number;
     value: string;
-  }[],
+  }>,
 ) {
   return (
     contactRows
@@ -301,8 +301,8 @@ export function getPrimaryEmailForMember(
 }
 
 export async function roleGrantsAnyPermission(
-  roleIds: string[],
-  permissionKeys: string[],
+  roleIds: Array<string>,
+  permissionKeys: Array<string>,
 ) {
   if (roleIds.length === 0 || permissionKeys.length === 0) return false;
 

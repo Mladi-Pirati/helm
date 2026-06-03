@@ -7,7 +7,7 @@ import type { MembershipApplicationsListFilters } from "@/lib/membership-applica
 export function buildMembershipApplicationsWhere(
   filters: MembershipApplicationsListFilters,
 ): SQL<unknown> | undefined {
-  const whereClauses: SQL<unknown>[] = [];
+  const whereClauses: Array<SQL<unknown>> = [];
 
   if (filters.q) {
     const searchPattern = `%${filters.q}%`;

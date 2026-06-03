@@ -41,7 +41,7 @@ const defaultValues: CreatePermissionInput = {
   description: "",
 };
 
-export function AddPermissionSheet({ modules }: { modules: ModuleOption[] }) {
+export function AddPermissionSheet({ modules }: { modules: Array<ModuleOption> }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [serverMessage, setServerMessage] = useState<string | null>(null);

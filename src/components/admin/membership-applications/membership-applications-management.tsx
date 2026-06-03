@@ -82,10 +82,10 @@ export function MembershipApplicationsManagement({
   page: number;
   pageCount: number;
   pageSize: number;
-  pageSizeOptions: PageSizeOption[];
+  pageSizeOptions: Array<PageSizeOption>;
   previousPageHref: string;
   queryString: string;
-  rows: MembershipApplicationListRow[];
+  rows: Array<MembershipApplicationListRow>;
   totalCount: number;
 }) {
   const router = useRouter();
@@ -100,7 +100,7 @@ export function MembershipApplicationsManagement({
     setRowSelection({});
   }, [rows]);
 
-  const columns: ColumnDef<MembershipApplicationListRow>[] = [
+  const columns: Array<ColumnDef<MembershipApplicationListRow>> = [
     {
       id: "select",
       header: ({ table }) => (

@@ -63,7 +63,7 @@ export async function hasPermission(permissionKey: string): Promise<boolean> {
 /**
  * Check if the current user has ALL of the specified permissions.
  */
-export async function hasAllPermissions(...permissionKeys: string[]): Promise<boolean> {
+export async function hasAllPermissions(...permissionKeys: Array<string>): Promise<boolean> {
   if (permissionKeys.length === 0) return true;
 
   const user = await getCurrentUser();
@@ -83,7 +83,7 @@ export async function hasAllPermissions(...permissionKeys: string[]): Promise<bo
 /**
  * Check if the current user has ANY of the specified permissions.
  */
-export async function hasAnyPermission(...permissionKeys: string[]): Promise<boolean> {
+export async function hasAnyPermission(...permissionKeys: Array<string>): Promise<boolean> {
   if (permissionKeys.length === 0) return true;
 
   const user = await getCurrentUser();
@@ -144,7 +144,7 @@ export const requirePermission = cache(async (permissionKey: string) => {
 /**
  * Require ALL of the specified permissions. Throws 403 if the user lacks any.
  */
-export const requireAllPermissions = cache(async (...permissionKeys: string[]) => {
+export const requireAllPermissions = cache(async (...permissionKeys: Array<string>) => {
   const allowed = await hasAllPermissions(...permissionKeys);
 
   if (!allowed) {
@@ -155,7 +155,7 @@ export const requireAllPermissions = cache(async (...permissionKeys: string[]) =
 /**
  * Require ANY of the specified permissions. Throws 403 if the user has none.
  */
-export const requireAnyPermission = cache(async (...permissionKeys: string[]) => {
+export const requireAnyPermission = cache(async (...permissionKeys: Array<string>) => {
   const allowed = await hasAnyPermission(...permissionKeys);
 
   if (!allowed) {
@@ -168,8 +168,8 @@ export const requireAnyPermission = cache(async (...permissionKeys: string[]) =>
  * Useful for rendering UI conditionally (e.g., showing/hiding buttons).
  */
 export async function getCurrentUserPermissions(): Promise<{
-  permissions: string[];
-  roles: { id: string; key: string; name: string }[];
+  permissions: Array<string>;
+  roles: Array<{ id: string; key: string; name: string }>;
 }> {
   const user = await getCurrentUser();
 

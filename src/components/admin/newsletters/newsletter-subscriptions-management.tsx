@@ -40,9 +40,9 @@ export function NewsletterSubscriptionsManagement({
   rows,
 }: {
   canDelete: boolean;
-  rows: NewsletterSubscriptionListRow[];
+  rows: Array<NewsletterSubscriptionListRow>;
 }) {
-  const columns: ColumnDef<NewsletterSubscriptionListRow>[] = [
+  const columns: Array<ColumnDef<NewsletterSubscriptionListRow>> = [
     {
       accessorKey: "email",
       header: "Email",

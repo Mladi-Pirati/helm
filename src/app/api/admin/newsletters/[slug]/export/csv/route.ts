@@ -29,7 +29,7 @@ function escapeCsvField(value: unknown): string {
   return stringValue;
 }
 
-function toCsvRow(values: readonly unknown[]): string {
+function toCsvRow(values: ReadonlyArray<unknown>): string {
   return values.map(escapeCsvField).join(",");
 }
 

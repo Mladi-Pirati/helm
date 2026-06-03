@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 type AdminNavLinksProps = {
-  permissions: string[];
+  permissions: Array<string>;
   onNavigate?: () => void;
 };
 

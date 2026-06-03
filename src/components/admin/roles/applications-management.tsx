@@ -66,8 +66,8 @@ function ApplicationFormSheet({
   const [clientQuery, setClientQuery] = useState(
     application?.keycloakClientId ?? "",
   );
-  const [clients, setClients] = useState<KeycloakClientOption[]>([]);
-  const [roles, setRoles] = useState<KeycloakRoleOption[]>([]);
+  const [clients, setClients] = useState<Array<KeycloakClientOption>>([]);
+  const [roles, setRoles] = useState<Array<KeycloakRoleOption>>([]);
   const [isPending, startTransition] = useTransition();
   const [isLookupPending, startLookupTransition] = useTransition();
 
@@ -327,7 +327,7 @@ function ArchiveApplicationButton({
   );
 }
 
-function ApplicationRows({ rows }: { rows: AccessApplicationListRow[] }) {
+function ApplicationRows({ rows }: { rows: Array<AccessApplicationListRow> }) {
   if (!rows.length) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-muted-foreground">
@@ -376,7 +376,7 @@ function ApplicationRows({ rows }: { rows: AccessApplicationListRow[] }) {
 export function ApplicationsManagement({
   rows,
 }: {
-  rows: AccessApplicationListRow[];
+  rows: Array<AccessApplicationListRow>;
 }) {
   return (
     <div className="grid gap-6">

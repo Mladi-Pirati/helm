@@ -9,9 +9,9 @@ export type ResendEmailPayload = {
   html: string;
   idempotencyKey: string;
   subject: string;
-  tags?: ResendEmailTag[];
+  tags?: Array<ResendEmailTag>;
   text: string;
-  to: string | string[];
+  to: string | Array<string>;
 };
 
 type ResendEmailClient = {
@@ -21,9 +21,9 @@ type ResendEmailClient = {
         from: string;
         html: string;
         subject: string;
-        tags?: ResendEmailTag[];
+        tags?: Array<ResendEmailTag>;
         text: string;
-        to: string | string[];
+        to: string | Array<string>;
       },
       options?: { idempotencyKey?: string },
     ): Promise<{

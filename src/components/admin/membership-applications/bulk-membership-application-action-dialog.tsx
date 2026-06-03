@@ -28,7 +28,7 @@ type BulkMembershipApplicationActionDialogProps = {
   children: ReactNode;
   disabled?: boolean;
   onSuccess: (message: string) => void;
-  rows: MembershipApplicationListRow[];
+  rows: Array<MembershipApplicationListRow>;
 };
 
 const actionLabels: Record<
@@ -64,7 +64,7 @@ const actionLabels: Record<
   },
 };
 
-function getApplicationPreview(rows: MembershipApplicationListRow[]) {
+function getApplicationPreview(rows: Array<MembershipApplicationListRow>) {
   const preview = rows
     .slice(0, 3)
     .map((row) => `${row.firstName} ${row.lastName}`.trim() || row.email)

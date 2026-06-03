@@ -23,7 +23,7 @@ export type RoleListRow = {
   description: string | null;
   rank: number;
   isSystem: boolean;
-  assignedPermissionIds: string[];
+  assignedPermissionIds: Array<string>;
 };
 
 export type RolePermissionOption = {
@@ -38,8 +38,8 @@ function RoleRows({
   permissions,
 }: {
   highestManagedRank: number | null;
-  rows: RoleListRow[];
-  permissions: RolePermissionOption[];
+  rows: Array<RoleListRow>;
+  permissions: Array<RolePermissionOption>;
 }) {
   if (!rows.length) {
     return (
@@ -72,7 +72,7 @@ function SortableRoleRow({
 }: {
   highestManagedRank: number | null;
   index: number;
-  permissions: RolePermissionOption[];
+  permissions: Array<RolePermissionOption>;
   role: RoleListRow;
 }) {
   const isLocked = highestManagedRank === null || role.rank <= highestManagedRank;
@@ -134,7 +134,7 @@ function SortableRoleRow({
   );
 }
 
-function applyVisualRanks(rows: RoleListRow[]) {
+function applyVisualRanks(rows: Array<RoleListRow>) {
   return rows.map((row, index) => ({ ...row, rank: index + 1 }));
 }
 
@@ -144,8 +144,8 @@ export function RolesManagement({
   permissions,
 }: {
   highestManagedRank: number | null;
-  rows: RoleListRow[];
-  permissions: RolePermissionOption[];
+  rows: Array<RoleListRow>;
+  permissions: Array<RolePermissionOption>;
 }) {
   const router = useRouter();
   const [rolesState, setRolesState] = useState(rows);
@@ -156,7 +156,7 @@ export function RolesManagement({
     setRolesState(rows);
   }, [rows]);
 
-  function isRoleOrderAllowed(nextRows: RoleListRow[]) {
+  function isRoleOrderAllowed(nextRows: Array<RoleListRow>) {
     const lockedRoleIds = rolesState
       .filter(
         (role) =>
@@ -188,7 +188,7 @@ export function RolesManagement({
             onDragEnd={(event) => {
               if (event.canceled) return;
               const previousRows = rolesState;
-              const nextRows = move(rolesState, event) as RoleListRow[];
+              const nextRows = move(rolesState, event) as Array<RoleListRow>;
 
               if (!isRoleOrderAllowed(nextRows)) {
                 setMessage("You cannot move roles above your highest role.");

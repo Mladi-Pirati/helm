@@ -9,7 +9,7 @@ type DiscordEmbedNotification = {
   description?: string;
   adminPath?: string;
   color?: number;
-  fields: DiscordEmbedField[];
+  fields: Array<DiscordEmbedField>;
 };
 
 type DiscordWebhookLogDetails = Record<

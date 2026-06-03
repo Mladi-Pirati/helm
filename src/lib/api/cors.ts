@@ -20,7 +20,7 @@ const allowedHostSuffixes = [
 ] as const;
 
 type CorsOptions = {
-  methods?: readonly string[];
+  methods?: ReadonlyArray<string>;
 };
 
 function isAllowedHostname(hostname: string) {
@@ -76,7 +76,7 @@ function appendVary(headers: Headers, value: string) {
 function applyCorsHeaders(
   headers: Headers,
   origin: string | null,
-  methods: readonly string[],
+  methods: ReadonlyArray<string>,
 ) {
   appendVary(headers, "Origin");
   appendVary(headers, "Access-Control-Request-Method");

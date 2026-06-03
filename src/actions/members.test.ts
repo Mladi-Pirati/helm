@@ -21,15 +21,15 @@ let targetMember:
   lastName: "Lovelace",
   username: "ada",
 };
-let deletedMemberIds: string[] = [];
-let deleteUserCalls: string[] = [];
-let removeAllClientRolesCalls: string[] = [];
+let deletedMemberIds: Array<string> = [];
+let deleteUserCalls: Array<string> = [];
+let removeAllClientRolesCalls: Array<string> = [];
 let syncMemberApplicationRolesCalls: Array<{
   disabled: boolean;
   keycloakId: string;
   memberId: string;
 }> = [];
-let revalidatedPaths: string[] = [];
+let revalidatedPaths: Array<string> = [];
 let keycloakUsersById: Record<
   string,
   {
@@ -190,8 +190,8 @@ async function memberHasActiveRole(memberId: string) {
 }
 
 async function roleGrantsAnyPermission(
-  roleIds: string[],
-  permissionKeys: string[],
+  roleIds: Array<string>,
+  permissionKeys: Array<string>,
 ) {
   void permissionKeys;
   return roleIds.some((roleId) => criticalRoleIds.has(roleId));
@@ -233,6 +233,7 @@ type MockDb = {
         };
       };
       where(condition?: unknown):
+        | Promise<Array<{ memberId: string; roleId: string }>>
         | Promise<Array<{ id: string; rank: number }>>
         | Promise<Array<{ value: null }>>
         | {

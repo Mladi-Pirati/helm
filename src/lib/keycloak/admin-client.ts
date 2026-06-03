@@ -191,7 +191,7 @@ class KeycloakAdminClient {
   }
 
   async listUsers() {
-    const users: KeycloakUser[] = [];
+    const users: Array<KeycloakUser> = [];
     let first = 0;
 
     while (true) {
@@ -336,7 +336,7 @@ class KeycloakAdminClient {
 
   async sendRequiredActionsEmail(
     userId: string,
-    actions: KeycloakRequiredAction[],
+    actions: Array<KeycloakRequiredAction>,
   ) {
     await this.put(
       `${this.config.adminBaseUrl}/users/${encodeURIComponent(

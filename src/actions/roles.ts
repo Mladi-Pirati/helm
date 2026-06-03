@@ -134,7 +134,7 @@ export async function updateRoleAction(
 }
 
 export async function reorderRolesAction(
-  roleIds: string[],
+  roleIds: Array<string>,
 ): Promise<RoleMutationActionResult> {
   const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };
@@ -216,7 +216,7 @@ export async function deleteRoleAction(
 
 export async function updateRolePermissionsAction(
   roleId: string,
-  permissionIds: string[],
+  permissionIds: Array<string>,
 ): Promise<RoleMutationActionResult> {
   const access = await requireAccessControlPermission();
   if (!access.ok) return { ok: false, message: access.message };

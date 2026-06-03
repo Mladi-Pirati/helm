@@ -30,8 +30,8 @@ type RolePermissionsSheetProps = {
     id: string;
     name: string;
   };
-  permissions: PermissionOption[];
-  assignedPermissionIds: string[];
+  permissions: Array<PermissionOption>;
+  assignedPermissionIds: Array<string>;
 };
 
 export function RolePermissionsSheet({
@@ -92,7 +92,7 @@ export function RolePermissionsSheet({
       acc[permission.moduleName].push(permission);
       return acc;
     },
-    {} as Record<string, PermissionOption[]>,
+    {} as Record<string, Array<PermissionOption>>,
   );
 
   return (

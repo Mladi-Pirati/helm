@@ -73,9 +73,9 @@ function isUniqueViolation(error: unknown) {
 
 function getFieldErrors<T extends string>(
   error: {
-    flatten: () => { fieldErrors: Record<string, string[] | undefined> };
+    flatten: () => { fieldErrors: Record<string, Array<string> | undefined> };
   },
-  fields: T[],
+  fields: Array<T>,
 ) {
   const fieldErrors = error.flatten().fieldErrors;
   return Object.fromEntries(
@@ -135,7 +135,7 @@ async function findActiveApplicationConflict(values: {
 export async function searchKeycloakClientsAction(query: string): Promise<
   ActionResult<{
     ok: true;
-    clients: { clientId: string; id: string }[];
+    clients: Array<{ clientId: string; id: string }>;
   }>
 > {
   const access = await requireAccessControlPermission();
@@ -160,7 +160,7 @@ export async function searchKeycloakClientsAction(query: string): Promise<
 export async function listKeycloakClientRolesAction(clientId: string): Promise<
   ActionResult<{
     ok: true;
-    roles: { id: string; name: string }[];
+    roles: Array<{ id: string; name: string }>;
   }>
 > {
   const access = await requireAccessControlPermission();

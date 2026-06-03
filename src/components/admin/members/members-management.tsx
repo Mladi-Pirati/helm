@@ -95,7 +95,7 @@ export type MemberApplicationBadge = {
 };
 
 export type MemberListRow = {
-  applications: MemberApplicationBadge[];
+  applications: Array<MemberApplicationBadge>;
   currentMembership: {
     expiresAt: string | null;
     extendedAt: string;
@@ -106,7 +106,7 @@ export type MemberListRow = {
   keycloakId: string;
   lastName: string;
   primaryEmail: string | null;
-  roles: MemberRoleBadge[];
+  roles: Array<MemberRoleBadge>;
   updatedAt: string;
   username: string;
 };
@@ -171,7 +171,7 @@ function getStatusFromSelection(selection: {
 }
 
 function toggleSelectedValue(
-  values: string[],
+  values: Array<string>,
   value: string,
   checked: boolean,
 ) {
@@ -222,7 +222,7 @@ function AddMemberSheet() {
     username: "",
   });
   const [fieldErrors, setFieldErrors] = useState<CreateMemberFieldErrors>({});
-  const [users, setUsers] = useState<KeycloakUserOption[]>([]);
+  const [users, setUsers] = useState<Array<KeycloakUserOption>>([]);
   const [serverMessage, setServerMessage] = useState<string | null>(null);
   const searchIdRef = useRef(0);
   const [isSearching, startSearchTransition] = useTransition();
@@ -630,7 +630,7 @@ function RolesFilterDialog({
   roleOptions,
 }: {
   filters: MembersListFilters;
-  roleOptions: RoleOption[];
+  roleOptions: Array<RoleOption>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -746,9 +746,9 @@ function InlineAssignmentPopover({
   onToggle: (
     optionId: string,
     assigned: boolean,
-    assignedIds: string[],
+    assignedIds: Array<string>,
   ) => Promise<string | null>;
-  options: AssignmentOption[];
+  options: Array<AssignmentOption>;
 }) {
   const [open, setOpen] = useState(false);
   const [optimisticAssignedIds, setOptimisticAssignedIds] = useState(
@@ -904,7 +904,7 @@ export function MembersManagement({
   roleOptions,
   totalCount,
 }: {
-  applicationOptions: ApplicationOption[];
+  applicationOptions: Array<ApplicationOption>;
   canCreate: boolean;
   canManageRoles: boolean;
   filters: MembersListFilters;
@@ -912,17 +912,17 @@ export function MembersManagement({
   page: number;
   pageCount: number;
   pageSize: number;
-  pageSizeOptions: PageSizeOption[];
+  pageSizeOptions: Array<PageSizeOption>;
   previousPageHref: string;
-  rows: MemberListRow[];
-  roleOptions: RoleOption[];
+  rows: Array<MemberListRow>;
+  roleOptions: Array<RoleOption>;
   totalCount: number;
 }) {
   const router = useRouter();
 
   async function updateInlineRoles(
     row: MemberListRow,
-    assignedRoleIds: string[],
+    assignedRoleIds: Array<string>,
   ) {
     const result = await updateMemberRolesAction(
       row.id,
@@ -950,7 +950,7 @@ export function MembersManagement({
     return result.ok ? null : result.message;
   }
 
-  const columns: ColumnDef<MemberListRow>[] = [
+  const columns: Array<ColumnDef<MemberListRow>> = [
     {
       id: "member",
       header: () => {

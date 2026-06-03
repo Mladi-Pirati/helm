@@ -18,7 +18,7 @@ export type PermissionModuleOption = {
   name: string;
 };
 
-function PermissionRows({ rows }: { rows: PermissionListRow[] }) {
+function PermissionRows({ rows }: { rows: Array<PermissionListRow> }) {
   if (!rows.length) {
     return (
       <div className="flex h-32 items-center justify-center px-4 text-center text-xs text-muted-foreground">
@@ -61,8 +61,8 @@ export function PermissionsManagement({
   rows,
   modules,
 }: {
-  rows: PermissionListRow[];
-  modules: PermissionModuleOption[];
+  rows: Array<PermissionListRow>;
+  modules: Array<PermissionModuleOption>;
 }) {
   return (
     <div className="grid gap-6">
