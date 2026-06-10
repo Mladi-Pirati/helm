@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   CreateAccessApplicationInput,
@@ -188,7 +189,7 @@ function ApplicationFormSheet({
       }
     >
       <div className="grid gap-2">
-        <label className="text-sm font-medium">Name</label>
+        <Label>Name</Label>
         <Input
           aria-invalid={Boolean(fieldErrors.name)}
           onChange={(event) => setField("name", event.target.value)}
@@ -199,7 +200,7 @@ function ApplicationFormSheet({
         ) : null}
       </div>
       <div className="grid gap-2">
-        <label className="text-sm font-medium">Description</label>
+        <Label>Description</Label>
         <Textarea
           aria-invalid={Boolean(fieldErrors.description)}
           onChange={(event) => setField("description", event.target.value)}
@@ -210,7 +211,7 @@ function ApplicationFormSheet({
         ) : null}
       </div>
       <div className="grid gap-2">
-        <label className="text-sm font-medium">Keycloak client</label>
+        <Label>Keycloak client</Label>
         <div className="flex gap-2">
           <Input
             aria-invalid={Boolean(fieldErrors.keycloakClientId)}
@@ -253,7 +254,7 @@ function ApplicationFormSheet({
         ) : null}
       </div>
       <div className="grid gap-2">
-        <label className="text-sm font-medium">Client role</label>
+        <Label>Client role</Label>
         <Input disabled value={values.keycloakRoleName} />
         {fieldErrors.keycloakRoleName ? (
           <p className="text-xs text-destructive">

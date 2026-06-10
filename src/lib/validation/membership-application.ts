@@ -35,6 +35,11 @@ export const membershipApplicationSchema = z
       .trim()
       .min(1, "Last name is required.")
       .max(120, "Last name must be 120 characters or fewer."),
+    fullLegalName: z
+      .string({ error: "Full legal name is required." })
+      .trim()
+      .min(1, "Full legal name is required.")
+      .max(200, "Full legal name must be 200 characters or fewer."),
     dateOfBirth: z
       .string()
       .regex(

@@ -14,6 +14,7 @@ describe("member validation", () => {
     expect(
       createMemberSchema.parse({
         firstName: " Ana ",
+        fullLegalName: " Ana Novak ",
         keycloakId: " keycloak-1 ",
         lastName: " Novak ",
         primaryEmail: " ANA@EXAMPLE.TEST ",
@@ -21,6 +22,7 @@ describe("member validation", () => {
       }),
     ).toEqual({
       firstName: "Ana",
+      fullLegalName: "Ana Novak",
       keycloakId: "keycloak-1",
       lastName: "Novak",
       notes: "",
@@ -33,12 +35,14 @@ describe("member validation", () => {
     expect(
       createMemberSchema.parse({
         firstName: " Ana ",
+        fullLegalName: " Ana Novak ",
         lastName: " Novak ",
         primaryEmail: " ANA@EXAMPLE.TEST ",
         username: " ana ",
       }),
     ).toEqual({
       firstName: "Ana",
+      fullLegalName: "Ana Novak",
       keycloakId: "",
       lastName: "Novak",
       notes: "",
@@ -107,6 +111,7 @@ describe("member validation", () => {
     expect(
       memberProfileSchema.safeParse({
         firstName: "Ana",
+        fullLegalName: "Ana Novak",
         lastName: "Novak",
         notes: "",
         primaryEmail: "ana@example.test",

@@ -59,6 +59,7 @@ let createdKeycloakUsers: Array<{
 }> = [];
 let createdMembers: Array<{
   firstName: string;
+  fullLegalName: string;
   keycloakId: string;
   lastName: string;
   notes?: string;
@@ -456,6 +457,7 @@ describe("createMemberAction", () => {
     await expect(
       createMemberAction({
         firstName: "Local",
+        fullLegalName: "Local Override",
         keycloakId: "selected-keycloak-user",
         lastName: "Override",
         notes: "Admin note",
@@ -471,6 +473,7 @@ describe("createMemberAction", () => {
     expect(createdMembers).toEqual([
       {
         firstName: "Local",
+        fullLegalName: "Local Override",
         keycloakId: "selected-keycloak-user",
         lastName: "Override",
         notes: "Admin note",
@@ -505,6 +508,7 @@ describe("createMemberAction", () => {
     await expect(
       createMemberAction({
         firstName: "Ana",
+        fullLegalName: "Ana Novak",
         keycloakId: "",
         lastName: "Novak",
         notes: "",
@@ -530,6 +534,7 @@ describe("createMemberAction", () => {
     await expect(
       createMemberAction({
         firstName: "Ana",
+        fullLegalName: "Ana Novak",
         keycloakId: "",
         lastName: "Novak",
         notes: "",
@@ -570,6 +575,7 @@ describe("createMemberAction", () => {
     await expect(
       createMemberAction({
         firstName: "Ana",
+        fullLegalName: "Ana Novak",
         keycloakId: "",
         lastName: "Novak",
         notes: "",
@@ -594,6 +600,7 @@ describe("createMemberAction", () => {
     await expect(
       createMemberAction({
         firstName: "Selected",
+        fullLegalName: "Selected User",
         keycloakId: "selected-keycloak-user",
         lastName: "User",
         notes: "",

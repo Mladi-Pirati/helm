@@ -13,6 +13,7 @@ import { DeleteRoleDialog } from "@/components/admin/roles/delete-role-dialog";
 import { EditRoleSheet } from "@/components/admin/roles/edit-role-sheet";
 import { RolePermissionsSheet } from "@/components/admin/roles/role-permissions-sheet";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -99,14 +100,16 @@ function SortableRoleRow({
           <LockIcon className="size-4" />
         </div>
       ) : (
-        <button
-          className="flex size-8 items-center justify-center border text-muted-foreground"
+        <Button
+          className="size-8 border"
           ref={handleRef}
+          size="icon"
           title="Drag to change priority"
           type="button"
+          variant="ghost"
         >
           <GripVerticalIcon className="size-4" />
-        </button>
+        </Button>
       )}
       <div className="grid min-w-0 gap-1">
         <div className="flex flex-wrap items-center gap-2">

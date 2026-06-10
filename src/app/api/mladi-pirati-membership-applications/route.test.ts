@@ -67,6 +67,7 @@ const originalFetch = globalThis.fetch;
 
 const validMembershipApplicationPayload = {
   firstName: "Ada",
+  fullLegalName: "Ada Lovelace",
   lastName: "Lovelace",
   dateOfBirth: "1994-12-10",
   placeOfBirth: "Ljubljana",
@@ -535,6 +536,7 @@ describe("POST /api/mladi-pirati-membership-applications", () => {
       error: "Validation failed.",
       fieldErrors: {
         firstName: ["First name is required."],
+        fullLegalName: ["Full legal name is required."],
         lastName: ["Last name is required."],
       },
     });

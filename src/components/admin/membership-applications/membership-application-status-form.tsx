@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   MemberCreationStatus,
@@ -264,12 +265,12 @@ export function MembershipApplicationStatusForm({
             });
           }}
         >
-          <label
-            className="text-xs font-medium text-foreground"
+          <Label
+            className="text-xs text-foreground"
             htmlFor="rejectionReason"
           >
             Rejection reason
-          </label>
+          </Label>
           <Textarea
             disabled={isPending}
             id="rejectionReason"

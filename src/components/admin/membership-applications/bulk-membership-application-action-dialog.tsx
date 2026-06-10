@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getRejectionReasonWordCount,
@@ -172,12 +173,12 @@ export function BulkMembershipApplicationActionDialog({
         ) : null}
         {action === "reject" ? (
           <div className="grid gap-2">
-            <label
-              className="text-xs font-medium text-foreground"
+            <Label
+              className="text-xs text-foreground"
               htmlFor="bulkRejectionReason"
             >
               Rejection reason
-            </label>
+            </Label>
             <Textarea
               disabled={isPending}
               id="bulkRejectionReason"

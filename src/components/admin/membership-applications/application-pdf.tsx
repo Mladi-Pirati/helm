@@ -39,6 +39,7 @@ Font.register({
 export type MembershipApplicationPdfRow = {
   id: string;
   firstName: string;
+  fullLegalName: string;
   lastName: string;
   dateOfBirth: string;
   placeOfBirth: string;
@@ -241,6 +242,7 @@ export function MembershipApplicationPdfDocument({
           <Text style={styles.sectionTitle}>Identiteta in kontakt</Text>
           <View style={styles.grid}>
             <Field label="Ime" value={row.firstName} />
+            <Field label="Polno pravno ime" value={row.fullLegalName} />
             <Field label="Priimek" value={row.lastName} />
             <Field label="E-pošta" value={row.email} />
             <Field label="Telefon" value={row.phone} />

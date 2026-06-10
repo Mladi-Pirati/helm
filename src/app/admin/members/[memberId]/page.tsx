@@ -150,6 +150,7 @@ export default async function MemberDetailPage({
       member={{
         disabledAt: member.disabledAt?.toISOString() ?? null,
         firstName: member.firstName,
+        fullLegalName: member.fullLegalName,
         id: member.id,
         keycloakId: member.keycloakId,
         lastName: member.lastName,

@@ -30,6 +30,7 @@ export type MembershipApplicationProvisioningApplication = {
   discordUsername: string | null;
   email: string;
   firstName: string;
+  fullLegalName: string;
   id: string;
   lastName: string;
   phone: string | null;
@@ -52,6 +53,7 @@ export type FullMemberProfileInput = {
   discordUsername: string | null;
   email: string;
   firstName: string;
+  fullLegalName: string;
   keycloakId: string;
   lastName: string;
   membershipStartedAt: Date;
@@ -155,6 +157,7 @@ export async function provisionMembershipApplicationMember(
     discordUsername: application.discordUsername?.trim() || null,
     email,
     firstName: application.firstName,
+    fullLegalName: application.fullLegalName,
     keycloakId: keycloakUser.id,
     lastName: application.lastName,
     membershipStartedAt: now(),
@@ -258,6 +261,7 @@ function createMembershipApplicationProvisioningRepository(): MembershipApplicat
           .insert(members)
           .values({
             firstName: input.firstName,
+            fullLegalName: input.fullLegalName,
             keycloakId: input.keycloakId,
             lastName: input.lastName,
             notes: `Created from membership application ${input.applicationId}.`,

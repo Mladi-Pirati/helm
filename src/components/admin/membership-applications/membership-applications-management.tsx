@@ -15,6 +15,14 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -24,7 +32,6 @@ import {
   TableRow,
   TableScrollContainer,
 } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { BulkMembershipApplicationActionDialog } from "@/components/admin/membership-applications/bulk-membership-application-action-dialog";
 import { DeleteMembershipApplicationDialog } from "@/components/admin/membership-applications/delete-membership-application-dialog";
 import { differenceInYears } from "date-fns";
@@ -426,25 +433,29 @@ export function MembershipApplicationsManagement({
               {totalCount} total · Page {page} of {pageCount}
             </span>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Per page</span>
-                <select
-                  className="h-8 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-                  onChange={(event) => {
+                <Select
+                  onValueChange={(v) => {
                     const option = pageSizeOptions.find(
-                      ({ value }) => value === Number(event.target.value),
+                      ({ value }) => value === Number(v),
                     );
                     if (option) router.push(option.href);
                   }}
                   value={String(pageSize)}
                 >
-                  {pageSizeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.value}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger className="h-8 w-16 rounded-md">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pageSizeOptions.map((option) => (
+                      <SelectItem key={option.value} value={String(option.value)}>
+                        {option.value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex gap-2">
                 <Button asChild variant="outline">
                   <Link href={previousPageHref}>Previous</Link>

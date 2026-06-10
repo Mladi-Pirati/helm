@@ -4,6 +4,7 @@ import * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Input } from "@/components/ui/input";
 import {
   buildMembersFilterHref,
   type MembersListFilters,
@@ -65,11 +66,11 @@ export function MembersFilterForm({
 
   return (
     <form
-      className="grid gap-3 rounded-none border p-4 md:grid-cols-2"
+      className="grid gap-3 rounded-md border p-4 md:grid-cols-2"
       onSubmit={submitSearch}
     >
-      <input
-        className="h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 md:col-span-2"
+      <Input
+        className="h-8 rounded-md md:col-span-2"
         name="q"
         onChange={(event) => setQuery(event.target.value)}
         placeholder="Search name, username, email, or Keycloak id"

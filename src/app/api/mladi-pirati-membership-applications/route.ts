@@ -320,6 +320,7 @@ export async function POST(request: Request) {
   try {
     const {
       firstName,
+      fullLegalName,
       lastName,
       dateOfBirth,
       placeOfBirth,
@@ -339,6 +340,7 @@ export async function POST(request: Request) {
       .insert(mladiPiratiMembershipApplications)
       .values({
         firstName,
+        fullLegalName,
         lastName,
         dateOfBirth,
         placeOfBirth,

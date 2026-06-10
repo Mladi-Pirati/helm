@@ -25,6 +25,7 @@ export const createMemberSchema = z.object({
     .or(z.literal(""))
     .default(""),
   lastName: trimmedRequired("Last name", 120),
+  fullLegalName: trimmedRequired("Full legal name", 200),
   notes: optionalText().default(""),
   primaryEmail: primaryEmailSchema,
   username: trimmedRequired("Username", 120),
@@ -33,6 +34,7 @@ export const createMemberSchema = z.object({
 export const memberProfileSchema = z.object({
   firstName: trimmedRequired("First name", 120),
   lastName: trimmedRequired("Last name", 120),
+  fullLegalName: trimmedRequired("Full legal name", 200),
   notes: optionalText(),
   primaryEmail: primaryEmailSchema,
   username: trimmedRequired("Username", 120),

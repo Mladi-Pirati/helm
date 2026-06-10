@@ -4,14 +4,17 @@ import { revalidatePath } from "next/cache";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/db";
 import {
   type MemberCreationStatus,
   type MembershipApplicationStatus,
   mladiPiratiMembershipApplications,
 } from "@/db/schema";
-import { hasPermission } from "@/lib/auth/permissions";
-import { provisionMembershipApplicationMember } from "@/lib/membership-application-provisioning";
+import {
+  db,
+  hasPermission,
+  provisionMembershipApplicationMember,
+  sendDiscordApprovalEvent,
+} from "@/lib/membership-application-action-dependencies";
 import {
   buildBulkMembershipApplicationActionMessage,
   bulkMembershipApplicationActions,
@@ -494,10 +497,11 @@ async function createMemberForApprovedApplication(applicationId: string) {
     return "fail" satisfies MemberCreationStatus;
   }
 
+  let memberCreationStatus: MemberCreationStatus = "success";
+
   try {
     await provisionMembershipApplicationMember(application);
     await setApplicationMemberCreationStatus(applicationId, "success");
-    return "success" satisfies MemberCreationStatus;
   } catch (error) {
     console.error("[membership-application-member-creation]", {
       applicationId,
@@ -507,7 +511,35 @@ async function createMemberForApprovedApplication(applicationId: string) {
           : String(error),
     });
     await setApplicationMemberCreationStatus(applicationId, "fail");
-    return "fail" satisfies MemberCreationStatus;
+    memberCreationStatus = "fail";
+  }
+
+  await sendDiscordApprovalEventSafely({
+    applicationId: application.id,
+    discordUsername: application.discordUsername,
+  });
+
+  return memberCreationStatus;
+}
+
+async function sendDiscordApprovalEventSafely(application: {
+  applicationId: string;
+  discordUsername: string | null;
+}) {
+  try {
+    await sendDiscordApprovalEvent({
+      applicationId: application.applicationId,
+      approvedAt: new Date(),
+      discordUsername: application.discordUsername,
+    });
+  } catch (error) {
+    console.error("[discord-approval-event]", {
+      applicationId: application.applicationId,
+      error:
+        error instanceof Error
+          ? { message: error.message, name: error.name }
+          : String(error),
+    });
   }
 }
 
@@ -518,6 +550,7 @@ async function getApplicationForMemberCreation(applicationId: string) {
       discordUsername: true,
       email: true,
       firstName: true,
+      fullLegalName: true,
       id: true,
       lastName: true,
       phone: true,

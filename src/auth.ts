@@ -141,6 +141,7 @@ async function ensureLocalUserForSignIn(profile: unknown, accessToken: unknown) 
       .update(members)
       .set({
         firstName: firstName || username,
+        fullLegalName: [firstName || username, lastName].filter(Boolean).join(" "),
         lastName: lastName || "",
         keycloakId: parsedProfile.data.sub,
         username,
@@ -156,6 +157,7 @@ async function ensureLocalUserForSignIn(profile: unknown, accessToken: unknown) 
     .insert(members)
     .values({
       firstName: firstName || username,
+      fullLegalName: [firstName || username, lastName].filter(Boolean).join(" "),
       lastName: lastName || "",
       keycloakId: parsedProfile.data.sub,
       username,

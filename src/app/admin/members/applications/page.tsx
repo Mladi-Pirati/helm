@@ -1,5 +1,6 @@
 import { MembershipApplicationsManagement } from "@/components/admin/membership-applications/membership-applications-management";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getCurrentUserPermissions } from "@/lib/auth/permissions";
 import {
   DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE,
@@ -59,7 +60,7 @@ export default async function AdminMembershipApplicationsPage({
         </div>
       </div>
 
-      <form className="grid gap-3 rounded-none border p-4 sm:grid-cols-3">
+      <form className="grid gap-3 rounded-md border p-4 sm:grid-cols-3">
         {filters.pageSize !== DEFAULT_MEMBERSHIP_APPLICATIONS_PAGE_SIZE ? (
           <input
             defaultValue={filters.pageSize}
@@ -67,8 +68,8 @@ export default async function AdminMembershipApplicationsPage({
             type="hidden"
           />
         ) : null}
-        <input
-          className="h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 sm:col-span-2"
+        <Input
+          className="h-8 rounded-md sm:col-span-2"
           defaultValue={filters.q}
           name="q"
           placeholder="Search by name, email, city, or phone"

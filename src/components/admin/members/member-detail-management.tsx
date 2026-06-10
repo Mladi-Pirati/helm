@@ -43,7 +43,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -112,6 +118,7 @@ type MembershipRow = {
 type MemberDetail = {
   disabledAt: string | null;
   firstName: string;
+  fullLegalName: string;
   id: string;
   keycloakId: string;
   lastName: string;
@@ -141,6 +148,7 @@ function ProfileTab({
   const router = useRouter();
   const [profileForm, setProfileForm] = useState({
     firstName: member.firstName,
+    fullLegalName: member.fullLegalName,
     lastName: member.lastName,
     notes: member.notes ?? "",
     primaryEmail: member.primaryEmail,
@@ -155,6 +163,7 @@ function ProfileTab({
     startTransition(async () => {
       const result = await updateMemberProfileAction(member.id, {
         firstName: profileForm.firstName,
+        fullLegalName: profileForm.fullLegalName,
         lastName: profileForm.lastName,
         notes: profileForm.notes,
         primaryEmail: profileForm.primaryEmail,
@@ -195,7 +204,7 @@ function ProfileTab({
         <form className="grid gap-4 p-4" onSubmit={submit}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field>
-              <label className="text-xs font-medium">First name</label>
+              <Label className="text-xs">First name (preferred name)</Label>
               <Input
                 disabled={!canUpdate}
                 name="firstName"
@@ -210,7 +219,7 @@ function ProfileTab({
               />
             </Field>
             <Field>
-              <label className="text-xs font-medium">Last name</label>
+              <Label className="text-xs">Last name</Label>
               <Input
                 disabled={!canUpdate}
                 name="lastName"
@@ -226,7 +235,22 @@ function ProfileTab({
             </Field>
           </div>
           <Field>
-            <label className="text-xs font-medium">Username</label>
+            <Label className="text-xs">Full legal name</Label>
+            <Input
+              disabled={!canUpdate}
+              name="fullLegalName"
+              onChange={(event) =>
+                setProfileForm((current) => ({
+                  ...current,
+                  fullLegalName: event.target.value,
+                }))
+              }
+              required
+              value={profileForm.fullLegalName}
+            />
+          </Field>
+          <Field>
+            <Label className="text-xs">Username</Label>
             <Input
               disabled={!canUpdate}
               name="username"
@@ -241,7 +265,7 @@ function ProfileTab({
             />
           </Field>
           <Field>
-            <label className="text-xs font-medium">Primary email</label>
+            <Label className="text-xs">Primary email</Label>
             <Input
               disabled={!canUpdate}
               name="primaryEmail"
@@ -257,7 +281,7 @@ function ProfileTab({
             />
           </Field>
           <Field>
-            <label className="text-xs font-medium">Notes</label>
+            <Label className="text-xs">Notes</Label>
             <Textarea
               disabled={!canUpdate}
               name="notes"
@@ -369,28 +393,29 @@ function DeleteMemberDialog({ member }: { member: MemberDetail }) {
             cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <div className="grid gap-2">
+        <RadioGroup
+          disabled={isPending}
+          onValueChange={(v) => setMode(v as DeleteMemberMode)}
+          value={mode}
+        >
           {deleteMemberOptions.map((option) => (
-            <label
-              className="grid cursor-pointer gap-1 border p-3 text-xs has-[:checked]:border-destructive"
+            <Label
+              className={cn(
+                "grid cursor-pointer gap-1 border p-3 text-xs font-normal",
+                mode === option.mode && "border-destructive",
+              )}
               key={option.mode}
             >
               <span className="flex items-center gap-2 font-medium text-foreground">
-                <input
-                  checked={mode === option.mode}
-                  disabled={isPending}
-                  name="delete-member-mode"
-                  onChange={() => setMode(option.mode)}
-                  type="radio"
-                />
+                <RadioGroupItem value={option.mode} />
                 {option.label}
               </span>
               <span className="text-muted-foreground">
                 {option.description}
               </span>
-            </label>
+            </Label>
           ))}
-        </div>
+        </RadioGroup>
         {serverMessage ? (
           <p className="text-xs font-medium text-destructive">
             {serverMessage}
@@ -472,14 +497,16 @@ function SortableContactRow({
       onSubmit={save}
       ref={ref}
     >
-      <button
-        className="flex size-8 items-center justify-center border text-muted-foreground"
+      <Button
+        className="size-8 border"
         disabled={!canUpdate}
         ref={handleRef}
+        size="icon"
         type="button"
+        variant="ghost"
       >
         <GripVerticalIcon className="size-4" />
-      </button>
+      </Button>
       <Select defaultValue={contact.type} name="type">
         <SelectTrigger disabled={!canUpdate}>
           <SelectValue />
@@ -499,15 +526,17 @@ function SortableContactRow({
         name="label"
         placeholder="Label"
       />
-      <label className="flex items-center gap-2 text-xs">
-        <input
+      <div className="flex items-center gap-2">
+        <Checkbox
           defaultChecked={contact.isPrimary}
           disabled={!canUpdate}
+          id={`isPrimary-${contact.id}`}
           name="isPrimary"
-          type="checkbox"
         />
-        Primary
-      </label>
+        <Label className="text-xs font-normal" htmlFor={`isPrimary-${contact.id}`}>
+          Primary
+        </Label>
+      </div>
       <div className="flex gap-2 md:justify-end">
         <Button disabled={!canUpdate || isPending} size="xs" type="submit">
           Save
@@ -616,10 +645,16 @@ function ContactsTab({
           </Select>
           <Input disabled={!canUpdate} name="value" placeholder="Value" />
           <Input disabled={!canUpdate} name="label" placeholder="Label" />
-          <label className="flex items-center gap-2 text-xs">
-            <input disabled={!canUpdate} name="isPrimary" type="checkbox" />
-            Primary
-          </label>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              disabled={!canUpdate}
+              id="isPrimary-new"
+              name="isPrimary"
+            />
+            <Label className="text-xs font-normal" htmlFor="isPrimary-new">
+              Primary
+            </Label>
+          </div>
           <Button disabled={!canUpdate || isPending} type="submit">
             Add contact
           </Button>
@@ -877,7 +912,7 @@ function MembershipsTab({
         </div>
         <form className="flex flex-wrap items-start gap-2" onSubmit={submit}>
           <Field>
-            <label className="text-xs font-medium">Extended at</label>
+            <Label className="text-xs">Extended at</Label>
             <Input
               aria-invalid={Boolean(fieldErrors.extendedAt)}
               disabled={!canUpdate}
@@ -891,7 +926,7 @@ function MembershipsTab({
             ) : null}
           </Field>
           <Field>
-            <label className="text-xs font-medium">Expires at</label>
+            <Label className="text-xs">Expires at</Label>
             <Input
               aria-invalid={Boolean(fieldErrors.expiresAt)}
               disabled={!canUpdate}
@@ -905,7 +940,7 @@ function MembershipsTab({
             ) : null}
           </Field>
           <Field>
-            <label className="text-xs font-medium">Ended at</label>
+            <Label className="text-xs">Ended at</Label>
             <Input
               aria-invalid={Boolean(fieldErrors.endedAt)}
               disabled={!canUpdate}

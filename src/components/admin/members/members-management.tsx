@@ -49,11 +49,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -143,7 +151,7 @@ type AssignmentOption = {
 
 type CreateMemberFieldErrors = Partial<
   Record<
-    "firstName" | "keycloakId" | "lastName" | "primaryEmail" | "username",
+    "firstName" | "fullLegalName" | "keycloakId" | "lastName" | "primaryEmail" | "username",
     string
   >
 >;
@@ -216,6 +224,7 @@ function AddMemberSheet() {
   );
   const [memberForm, setMemberForm] = useState({
     firstName: "",
+    fullLegalName: "",
     lastName: "",
     notes: "",
     primaryEmail: "",
@@ -272,6 +281,7 @@ function AddMemberSheet() {
     setSelectedUser(null);
     setMemberForm({
       firstName: "",
+      fullLegalName: "",
       lastName: "",
       notes: "",
       primaryEmail: "",
@@ -280,6 +290,7 @@ function AddMemberSheet() {
     setFieldErrors((current) => ({
       ...current,
       firstName: undefined,
+      fullLegalName: undefined,
       keycloakId: undefined,
       lastName: undefined,
       primaryEmail: undefined,
@@ -293,6 +304,7 @@ function AddMemberSheet() {
     setSelectedUser(null);
     setMemberForm({
       firstName: "",
+      fullLegalName: "",
       lastName: "",
       notes: "",
       primaryEmail: "",
@@ -310,6 +322,7 @@ function AddMemberSheet() {
     startTransition(async () => {
       const result = await createMemberAction({
         firstName: memberForm.firstName,
+        fullLegalName: memberForm.fullLegalName,
         keycloakId: selectedUser?.id ?? "",
         lastName: memberForm.lastName,
         notes: memberForm.notes,
@@ -353,9 +366,9 @@ function AddMemberSheet() {
         </SheetHeader>
         <form className="grid gap-4 p-4" onSubmit={handleSubmit}>
           <div className="grid gap-2">
-            <label className="text-xs font-medium" htmlFor="keycloak-search">
+            <Label className="text-xs" htmlFor="keycloak-search">
               Keycloak user
-            </label>
+            </Label>
             <div className="flex gap-2">
               <Popover onOpenChange={setPickerOpen} open={pickerOpen}>
                 <PopoverTrigger asChild>
@@ -392,13 +405,14 @@ function AddMemberSheet() {
                       </p>
                     ) : null}
                     {users.map((user) => (
-                      <button
-                        className="grid gap-0.5 rounded-none px-2 py-2 text-left text-xs hover:bg-muted"
+                      <Button
+                        className="grid h-auto w-full gap-0.5 rounded-md px-2 py-2 text-left text-xs"
                         key={user.id}
                         onClick={() => {
                           setSelectedUser(user);
                           setMemberForm({
                             firstName: user.firstName ?? "",
+                            fullLegalName: "",
                             lastName: user.lastName ?? "",
                             notes: "",
                             primaryEmail: user.email ?? "",
@@ -408,6 +422,7 @@ function AddMemberSheet() {
                           setPickerOpen(false);
                         }}
                         type="button"
+                        variant="ghost"
                       >
                         <span className="flex items-center gap-2 font-medium">
                           {selectedUser?.id === user.id ? (
@@ -419,7 +434,7 @@ function AddMemberSheet() {
                           @{user.username}
                           {user.email ? ` - ${user.email}` : ""}
                         </span>
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </PopoverContent>
@@ -452,7 +467,7 @@ function AddMemberSheet() {
               }
               value={memberForm.firstName}
               name="firstName"
-              placeholder="First name"
+              placeholder="First name (preferred name)"
               required
             />
             <Input
@@ -470,6 +485,21 @@ function AddMemberSheet() {
           {fieldErrors.firstName || fieldErrors.lastName ? (
             <p className="text-xs font-medium text-destructive">
               {fieldErrors.firstName ?? fieldErrors.lastName}
+            </p>
+          ) : null}
+          <Input
+            aria-invalid={Boolean(fieldErrors.fullLegalName)}
+            onChange={(event) =>
+              setMemberField("fullLegalName", event.target.value, "fullLegalName")
+            }
+            value={memberForm.fullLegalName}
+            name="fullLegalName"
+            placeholder="Full legal name"
+            required
+          />
+          {fieldErrors.fullLegalName ? (
+            <p className="text-xs font-medium text-destructive">
+              {fieldErrors.fullLegalName}
             </p>
           ) : null}
           <Input
@@ -577,8 +607,8 @@ function StatusFilterDialog({ filters }: { filters: MembersListFilters }) {
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">
-          <label
-            className="flex items-center gap-2 text-xs"
+          <Label
+            className="flex items-center gap-2 text-xs font-normal"
             htmlFor="members-status-active"
           >
             <Checkbox
@@ -592,9 +622,9 @@ function StatusFilterDialog({ filters }: { filters: MembersListFilters }) {
               }
             />
             Active
-          </label>
-          <label
-            className="flex items-center gap-2 text-xs"
+          </Label>
+          <Label
+            className="flex items-center gap-2 text-xs font-normal"
             htmlFor="members-status-disabled"
           >
             <Checkbox
@@ -608,7 +638,7 @@ function StatusFilterDialog({ filters }: { filters: MembersListFilters }) {
               }
             />
             Disabled
-          </label>
+          </Label>
         </div>
         <DialogFooter>
           <DialogClose asChild>
@@ -674,8 +704,8 @@ function RolesFilterDialog({
               : "overflow-visible",
           )}
         >
-          <label
-            className="flex items-center gap-2 text-xs"
+          <Label
+            className="flex items-center gap-2 text-xs font-normal"
             htmlFor="members-role-none"
           >
             <Checkbox
@@ -692,10 +722,10 @@ function RolesFilterDialog({
               }
             />
             No roles
-          </label>
+          </Label>
           {roleOptions.map((role) => (
-            <label
-              className="flex items-center gap-2 text-xs"
+            <Label
+              className="flex items-center gap-2 text-xs font-normal"
               htmlFor={`members-role-${role.id}`}
               key={role.id}
             >
@@ -709,7 +739,7 @@ function RolesFilterDialog({
                 }
               />
               {role.name}
-            </label>
+            </Label>
           ))}
         </div>
         <DialogFooter>
@@ -1210,25 +1240,29 @@ export function MembersManagement({
               Page {page} of {pageCount}
             </span>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <label className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>Per page</span>
-                <select
-                  className="h-8 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
-                  onChange={(event) => {
+                <Select
+                  onValueChange={(v) => {
                     const option = pageSizeOptions.find(
-                      ({ value }) => value === Number(event.target.value),
+                      ({ value }) => value === Number(v),
                     );
                     if (option) router.push(option.href);
                   }}
                   value={String(pageSize)}
                 >
-                  {pageSizeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.value}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <SelectTrigger className="h-8 w-16 rounded-md">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pageSizeOptions.map((option) => (
+                      <SelectItem key={option.value} value={String(option.value)}>
+                        {option.value}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex gap-2">
                 <Button asChild variant="outline">
                   <Link href={previousPageHref}>Previous</Link>

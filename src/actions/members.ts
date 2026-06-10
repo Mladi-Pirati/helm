@@ -539,6 +539,7 @@ export async function createMemberAction(
       message: "Please fix the highlighted fields.",
       fieldErrors: {
         firstName: fieldErrors.firstName?.[0],
+        fullLegalName: fieldErrors.fullLegalName?.[0],
         keycloakId: fieldErrors.keycloakId?.[0],
         lastName: fieldErrors.lastName?.[0],
         primaryEmail: fieldErrors.primaryEmail?.[0],
@@ -601,6 +602,7 @@ export async function createMemberAction(
         .insert(members)
         .values({
           firstName: parsed.data.firstName || keycloakUser.firstName || "",
+          fullLegalName: parsed.data.fullLegalName,
           keycloakId: keycloakUser.id,
           lastName: parsed.data.lastName || keycloakUser.lastName || "",
           notes: parsed.data.notes,
@@ -656,6 +658,7 @@ export async function updateMemberProfileAction(
       message: "Please fix the highlighted fields.",
       fieldErrors: {
         firstName: fieldErrors.firstName?.[0],
+        fullLegalName: fieldErrors.fullLegalName?.[0],
         lastName: fieldErrors.lastName?.[0],
         primaryEmail: fieldErrors.primaryEmail?.[0],
         username: fieldErrors.username?.[0],
@@ -688,6 +691,7 @@ export async function updateMemberProfileAction(
       .update(members)
       .set({
         firstName: parsed.data.firstName,
+        fullLegalName: parsed.data.fullLegalName,
         lastName: parsed.data.lastName,
         notes: parsed.data.notes ?? "",
         username: parsed.data.username,

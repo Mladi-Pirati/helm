@@ -71,6 +71,7 @@ export default async function AdminMembershipApplicationPage({
     .select({
       id: mladiPiratiMembershipApplications.id,
       firstName: mladiPiratiMembershipApplications.firstName,
+      fullLegalName: mladiPiratiMembershipApplications.fullLegalName,
       lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
@@ -150,8 +151,9 @@ export default async function AdminMembershipApplicationPage({
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <DetailItem label="First name" value={application.firstName} />
+              <DetailItem label="First name (preferred name)" value={application.firstName} />
               <DetailItem label="Last name" value={application.lastName} />
+              <DetailItem label="Full legal name" value={application.fullLegalName} />
               <DetailItem label="Email" value={application.email} />
               <DetailItem
                 label="Phone"

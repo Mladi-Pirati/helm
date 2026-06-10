@@ -104,7 +104,7 @@ export default async function AdminNewsletterPage({
         </div>
       </div>
 
-      <form className="grid gap-3 rounded-none border p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <form className="grid gap-3 rounded-md border p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <Input
           defaultValue={filters.q}
           name="q"

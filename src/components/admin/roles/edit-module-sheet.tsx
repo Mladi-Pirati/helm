@@ -3,20 +3,18 @@
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 
 import { updateModuleAction } from "@/actions/modules";
 import { FormSheet } from "@/components/admin/roles/form-sheet";
 import { Button } from "@/components/ui/button";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+  Field,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   updateModuleSchema,
@@ -75,57 +73,64 @@ export function EditModuleSheet({ module }: { module: EditableModule }) {
   });
 
   return (
-    <Form {...form}>
-      <FormSheet
-        description={`Update ${module.name}. The key cannot be changed.`}
-        isPending={isPending}
-        onOpenChange={handleOpenChange}
-        onSubmit={onSubmit}
-        open={open}
-        pendingLabel="Saving..."
-        serverMessage={serverMessage}
-        submitLabel="Save changes"
-        title="Edit module"
-        trigger={
-          <Button size="xs" type="button" variant="outline">
-            Edit
-          </Button>
-        }
-      >
-        <div className="grid gap-1">
-          <label className="text-sm font-medium">Key</label>
-          <Input disabled value={module.key} />
-          <p className="text-xs text-muted-foreground">
-            Module keys cannot be changed.
-          </p>
-        </div>
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea {...field} value={field.value ?? ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </FormSheet>
-    </Form>
+    <FormSheet
+      description={`Update ${module.name}. The key cannot be changed.`}
+      isPending={isPending}
+      onOpenChange={handleOpenChange}
+      onSubmit={onSubmit}
+      open={open}
+      pendingLabel="Saving..."
+      serverMessage={serverMessage}
+      submitLabel="Save changes"
+      title="Edit module"
+      trigger={
+        <Button size="xs" type="button" variant="outline">
+          Edit
+        </Button>
+      }
+    >
+      <div className="grid gap-1">
+        <Label>Key</Label>
+        <Input disabled value={module.key} />
+        <p className="text-xs text-muted-foreground">
+          Module keys cannot be changed.
+        </p>
+      </div>
+      <Controller
+        control={form.control}
+        name="name"
+        render={({ field, fieldState }) => (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+            <Input
+              {...field}
+              id={field.name}
+              aria-invalid={fieldState.invalid}
+            />
+            {fieldState.invalid && (
+              <FieldError errors={[fieldState.error]} />
+            )}
+          </Field>
+        )}
+      />
+      <Controller
+        control={form.control}
+        name="description"
+        render={({ field, fieldState }) => (
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={field.name}>Description</FieldLabel>
+            <Textarea
+              {...field}
+              id={field.name}
+              value={field.value ?? ""}
+              aria-invalid={fieldState.invalid}
+            />
+            {fieldState.invalid && (
+              <FieldError errors={[fieldState.error]} />
+            )}
+          </Field>
+        )}
+      />
+    </FormSheet>
   );
 }

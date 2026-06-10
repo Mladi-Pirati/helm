@@ -1,24 +1,29 @@
 import "dotenv/config";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { modules, permissions, roles, rolePermissions } from "@/db/schema";
+import {
+  accessApplications,
+  modules,
+  permissions,
+  roles,
+  rolePermissions,
+} from "@/db/schema";
 
 async function seed() {
   // Seed modules
   await db
     .insert(modules)
     .values([
-      { key: "access-control", name: "Access Control", description: "" },
-      {
-        key: "members",
-        name: "Members",
-        description: "Member management module",
-      },
-      { key: "newsletters", name: "Newsletters", description: "" },
+      { key: "access-control", name: "Access Control" },
+      { key: "members", name: "Members" },
+      { key: "newsletters", name: "Newsletters" },
     ])
-    .onConflictDoNothing({ target: modules.key });
+    .onConflictDoUpdate({
+      target: modules.key,
+      set: { name: sql`excluded.name` },
+    });
 
   // Fetch module IDs
   const mAccessControl = await db.query.modules.findFirst({
@@ -115,7 +120,10 @@ async function seed() {
     await db
       .insert(permissions)
       .values(permDef)
-      .onConflictDoNothing({ target: permissions.key });
+      .onConflictDoUpdate({
+        target: permissions.key,
+        set: { description: sql`excluded.description` },
+      });
   }
 
   // Seed Super Admin role
@@ -144,6 +152,32 @@ async function seed() {
       .values({ roleId: superadminRole.id, permissionId: perm.id })
       .onConflictDoNothing();
   }
+
+  // Seed applications
+  await db
+    .insert(accessApplications)
+    .values([
+      {
+        name: "Penpot",
+        description: "Open source and self hosted alternative to Figma",
+        keycloakClientId: "penpot",
+        keycloakRoleName: "user",
+      },
+      {
+        name: "Garage",
+        description:
+          "Our self hosted S3 solution UI panel. Should only be granted when absolutely necessary, otherwise controlled via access keys.",
+        keycloakClientId: "garage",
+        keycloakRoleName: "admin",
+      },
+      {
+        name: "Piratski Wiki",
+        description: "Wiki glavne stranke",
+        keycloakClientId: "wiki-pirati",
+        keycloakRoleName: "user",
+      },
+    ])
+    .onConflictDoNothing();
 
   console.log("Seed complete!");
 }

@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     .select({
       id: mladiPiratiMembershipApplications.id,
       firstName: mladiPiratiMembershipApplications.firstName,
+      fullLegalName: mladiPiratiMembershipApplications.fullLegalName,
       lastName: mladiPiratiMembershipApplications.lastName,
       dateOfBirth: mladiPiratiMembershipApplications.dateOfBirth,
       placeOfBirth: mladiPiratiMembershipApplications.placeOfBirth,
