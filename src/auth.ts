@@ -172,6 +172,7 @@ async function ensureLocalUserForSignIn(profile: unknown, accessToken: unknown) 
 }
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
+  trustHost: true,
   session: {
     strategy: "jwt",
   },
